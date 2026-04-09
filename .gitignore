@@ -1,0 +1,4 @@
+.build/
+*.app/
+.claude/
+.DS_Store
