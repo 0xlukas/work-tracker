@@ -20,6 +20,20 @@ struct AppSettings {
         UserDefaults.standard.object(forKey: trackingStartDateKey) != nil
     }
 
+    // MARK: - Daily Quote
+
+    private static let lastQuoteShownDateKey = "lastQuoteShownDate"
+
+    static var lastQuoteShownDate: Date? {
+        get { UserDefaults.standard.object(forKey: lastQuoteShownDateKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: lastQuoteShownDateKey) }
+    }
+
+    static var shouldShowDailyQuote: Bool {
+        guard let lastShown = lastQuoteShownDate else { return true }
+        return !Calendar.zurich.isDateInToday(lastShown)
+    }
+
     /// Custom directory for SwiftData storage. nil = default (Application Support).
     static var customDataDirectory: URL? {
         get {
