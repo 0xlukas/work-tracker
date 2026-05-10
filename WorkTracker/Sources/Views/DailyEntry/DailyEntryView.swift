@@ -5,6 +5,7 @@ struct DailyEntryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkSegment.startTime) private var allSegments: [WorkSegment]
     @Query(sort: \Project.name) private var projects: [Project]
+    @Query(sort: \VacationDay.date) private var allVacationDays: [VacationDay]
 
     @State private var selectedDate = Date()
     @State private var showAddSheet = false
@@ -21,8 +22,17 @@ struct DailyEntryView: View {
     }
 
     private let calculator = WorkHoursCalculator()
+
+    private var absenceLookup: [Date: AbsenceEntry] {
+        var lookup: [Date: AbsenceEntry] = [:]
+        for vd in allVacationDays {
+            lookup[vd.date.startOfDayZurich] = AbsenceEntry(type: vd.resolvedType, isHalfDay: vd.isHalfDay)
+        }
+        return lookup
+    }
+
     private var daySummary: DaySummary {
-        calculator.classify(date: selectedDate, vacationLookup: [:])
+        calculator.classify(date: selectedDate, absenceLookup: absenceLookup)
     }
 
     /// The current week (Mon-Fri) containing the selected date
@@ -75,6 +85,28 @@ struct DailyEntryView: View {
                             Image(systemName: "flag.fill")
                                 .foregroundStyle(.orange)
                             Text(daySummary.isHalfDayHoliday ? "\(name) (half day)" : name)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                    }
+
+                    if daySummary.isSick {
+                        HStack(spacing: 6) {
+                            Image(systemName: "thermometer.medium")
+                                .foregroundStyle(.red)
+                            Text(daySummary.isHalfDaySick ? "Sick (half day)" : "Sick day")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                    }
+
+                    if daySummary.isVacation {
+                        HStack(spacing: 6) {
+                            Image(systemName: "airplane")
+                                .foregroundStyle(.blue)
+                            Text(daySummary.isHalfDayVacation ? "Vacation (half day)" : "Vacation")
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -205,7 +237,7 @@ struct DailyEntryView: View {
         let isToday = day.isSameDay(as: Date())
         let daySegments = allSegments.filter { $0.date.isSameDay(as: day) }
         let dayHours = daySegments.reduce(0.0) { $0 + $1.durationHours }
-        let dayCls = calculator.classify(date: day, vacationLookup: [:])
+        let dayCls = calculator.classify(date: day, absenceLookup: absenceLookup)
 
         return Button {
             selectedDate = day

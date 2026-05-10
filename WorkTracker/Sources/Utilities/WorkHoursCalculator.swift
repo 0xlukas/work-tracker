@@ -1,5 +1,10 @@
 import Foundation
 
+struct AbsenceEntry {
+    let type: AbsenceType
+    let isHalfDay: Bool
+}
+
 struct DaySummary {
     let date: Date
     let expectedHours: Double
@@ -8,6 +13,8 @@ struct DaySummary {
     let isHalfDayHoliday: Bool
     let isVacation: Bool
     let isHalfDayVacation: Bool  // manual half-day vacation
+    let isSick: Bool
+    let isHalfDaySick: Bool
     let isWeekend: Bool
 }
 
@@ -19,6 +26,7 @@ struct PeriodSummary {
     let holidayDays: Int
     let halfDayHolidays: Int
     let vacationDays: Double
+    let sickDays: Double
 }
 
 struct MonthSummary: Identifiable {
@@ -62,63 +70,95 @@ struct WorkHoursCalculator {
         self.holidayNameLookup = names
     }
 
-    /// vacationLookup: date → isHalfDay (true = half-day vacation, false = full-day vacation)
-    func classify(date: Date, vacationLookup: [Date: Bool]) -> DaySummary {
+    func classify(date: Date, absenceLookup: [Date: AbsenceEntry]) -> DaySummary {
         let normalized = date.startOfDayZurich
 
         if normalized.isWeekend {
             return DaySummary(date: normalized, expectedHours: 0, isHoliday: false,
                             holidayName: nil, isHalfDayHoliday: false, isVacation: false,
-                            isHalfDayVacation: false, isWeekend: true)
+                            isHalfDayVacation: false, isSick: false, isHalfDaySick: false,
+                            isWeekend: true)
         }
 
-        let vacationEntry = vacationLookup[normalized]  // nil = no vacation, false = full, true = half
-        let isVacation = vacationEntry != nil
-        let isHalfDayVacation = vacationEntry == true
+        let absence = absenceLookup[normalized]
         let holidayType = holidayLookup[normalized]
         let holidayName = holidayNameLookup[normalized]
 
-        // Full-day holiday: always 0h, vacation irrelevant
+        // Full-day holiday: always 0h, absence irrelevant
         if holidayType == .fullDay {
             return DaySummary(date: normalized, expectedHours: 0, isHoliday: true,
                             holidayName: holidayName, isHalfDayHoliday: false, isVacation: false,
-                            isHalfDayVacation: false, isWeekend: false)
+                            isHalfDayVacation: false, isSick: false, isHalfDaySick: false,
+                            isWeekend: false)
         }
+
+        // Sick day on a half-day holiday: sick replaces the working half (0h expected)
+        if absence?.type == .sick && holidayType == .halfDay {
+            return DaySummary(date: normalized, expectedHours: 0, isHoliday: true,
+                            holidayName: holidayName, isHalfDayHoliday: true, isVacation: false,
+                            isHalfDayVacation: false, isSick: true,
+                            isHalfDaySick: absence?.isHalfDay == true,
+                            isWeekend: false)
+        }
+
+        // Half-day sick on a regular day: 4h expected (work half, sick half)
+        if absence?.type == .sick && absence?.isHalfDay == true {
+            return DaySummary(date: normalized, expectedHours: 4, isHoliday: false,
+                            holidayName: nil, isHalfDayHoliday: false, isVacation: false,
+                            isHalfDayVacation: false, isSick: true, isHalfDaySick: true,
+                            isWeekend: false)
+        }
+
+        // Full-day sick on a regular day: 0h expected
+        if absence?.type == .sick {
+            return DaySummary(date: normalized, expectedHours: 0, isHoliday: false,
+                            holidayName: nil, isHalfDayHoliday: false, isVacation: false,
+                            isHalfDayVacation: false, isSick: true, isHalfDaySick: false,
+                            isWeekend: false)
+        }
+
+        let isVacation = absence?.type == .vacation
+        let isHalfDayVacation = isVacation && absence?.isHalfDay == true
 
         // Vacation on a half-day holiday
         if isVacation && holidayType == .halfDay {
             return DaySummary(date: normalized, expectedHours: 0, isHoliday: true,
                             holidayName: holidayName, isHalfDayHoliday: true, isVacation: true,
-                            isHalfDayVacation: isHalfDayVacation, isWeekend: false)
+                            isHalfDayVacation: isHalfDayVacation, isSick: false, isHalfDaySick: false,
+                            isWeekend: false)
         }
 
         // Half-day vacation on a regular day: 4h expected (work half, vacation half)
         if isHalfDayVacation {
             return DaySummary(date: normalized, expectedHours: 4, isHoliday: false,
                             holidayName: nil, isHalfDayHoliday: false, isVacation: true,
-                            isHalfDayVacation: true, isWeekend: false)
+                            isHalfDayVacation: true, isSick: false, isHalfDaySick: false,
+                            isWeekend: false)
         }
 
         // Full-day vacation on a regular day: 0h expected
         if isVacation {
             return DaySummary(date: normalized, expectedHours: 0, isHoliday: false,
                             holidayName: nil, isHalfDayHoliday: false, isVacation: true,
-                            isHalfDayVacation: false, isWeekend: false)
+                            isHalfDayVacation: false, isSick: false, isHalfDaySick: false,
+                            isWeekend: false)
         }
 
-        // Half-day holiday without vacation: 4h expected
+        // Half-day holiday without absence: 4h expected
         if holidayType == .halfDay {
             return DaySummary(date: normalized, expectedHours: 4, isHoliday: true,
                             holidayName: holidayName, isHalfDayHoliday: true, isVacation: false,
-                            isHalfDayVacation: false, isWeekend: false)
+                            isHalfDayVacation: false, isSick: false, isHalfDaySick: false,
+                            isWeekend: false)
         }
 
         return DaySummary(date: normalized, expectedHours: 8, isHoliday: false,
                         holidayName: nil, isHalfDayHoliday: false, isVacation: false,
-                        isHalfDayVacation: false, isWeekend: false)
+                        isHalfDayVacation: false, isSick: false, isHalfDaySick: false,
+                        isWeekend: false)
     }
 
-    func periodSummary(from: Date, to: Date, vacationLookup: [Date: Bool], segments: [WorkSegment]) -> PeriodSummary {
+    func periodSummary(from: Date, to: Date, absenceLookup: [Date: AbsenceEntry], segments: [WorkSegment]) -> PeriodSummary {
         let days = from.startOfDayZurich.daysThrough(to.startOfDayZurich)
 
         var expectedHours: Double = 0
@@ -126,12 +166,33 @@ struct WorkHoursCalculator {
         var holidayDays = 0
         var halfDayHolidays = 0
         var vacationDayCount: Double = 0
+        var sickDayCount: Double = 0
 
         for day in days {
-            let summary = classify(date: day, vacationLookup: vacationLookup)
+            let summary = classify(date: day, absenceLookup: absenceLookup)
             expectedHours += summary.expectedHours
 
             if summary.isWeekend { continue }
+
+            // Sick on a half-day holiday: counts as 1 sick + 1 half-day holiday
+            if summary.isSick && summary.isHalfDayHoliday {
+                sickDayCount += 1
+                halfDayHolidays += 1
+                continue
+            }
+
+            // Half-day sick on regular day: 0.5 sick + still a partial working day
+            if summary.isSick && summary.isHalfDaySick {
+                sickDayCount += 0.5
+                workingDays += 1
+                continue
+            }
+
+            // Full-day sick on regular day
+            if summary.isSick {
+                sickDayCount += 1
+                continue
+            }
 
             // Vacation on a half-day holiday: counts as 0.5 vacation + 1 half-day holiday
             if summary.isVacation && summary.isHalfDayHoliday {
@@ -172,13 +233,14 @@ struct WorkHoursCalculator {
             workingDays: workingDays,
             holidayDays: holidayDays,
             halfDayHolidays: halfDayHolidays,
-            vacationDays: vacationDayCount
+            vacationDays: vacationDayCount,
+            sickDays: sickDayCount
         )
     }
 
     /// Monthly breakdown clamped to [startDate, endDate].
     /// Months entirely outside the range get 0/0. Partial months are clipped.
-    func monthlyBreakdown(year: Int, vacationLookup: [Date: Bool], segments: [WorkSegment],
+    func monthlyBreakdown(year: Int, absenceLookup: [Date: AbsenceEntry], segments: [WorkSegment],
                           startDate: Date? = nil, endDate: Date? = nil) -> [MonthSummary] {
         let cal = Calendar.zurich
         let tz = TimeZone(identifier: "Europe/Zurich")!
@@ -199,7 +261,7 @@ struct WorkHoursCalculator {
             }
 
             let summary = periodSummary(from: monthStart, to: monthEnd,
-                                        vacationLookup: vacationLookup, segments: segments)
+                                        absenceLookup: absenceLookup, segments: segments)
             return MonthSummary(year: year, month: month,
                                expectedHours: summary.expectedHours, actualHours: summary.actualHours)
         }
