@@ -3,7 +3,7 @@ import SwiftUI
 enum NavigationItem: String, CaseIterable, Identifiable {
     case dailyEntry = "Daily Entry"
     case projects = "Projects"
-    case vacation = "Vacation"
+    case absences = "Absences"
     case overview = "Overview"
 
     var id: String { rawValue }
@@ -12,7 +12,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         switch self {
         case .dailyEntry: return "calendar"
         case .projects: return "folder"
-        case .vacation: return "airplane"
+        case .absences: return "calendar.badge.minus"
         case .overview: return "chart.bar"
         }
     }
@@ -36,8 +36,8 @@ struct ContentView: View {
                     DailyEntryView()
                 case .projects:
                     ProjectsView()
-                case .vacation:
-                    VacationView()
+                case .absences:
+                    AbsencesView()
                 case .overview:
                     OverviewView()
                 case nil:

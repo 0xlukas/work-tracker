@@ -2,19 +2,28 @@ import SwiftUI
 import SwiftData
 import AppKit
 
-// MARK: - Full Vacation View (sidebar section)
+// MARK: - Full Absences View (sidebar section)
 
-struct VacationView: View {
+struct AbsencesView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \VacationDay.date) private var allVacationDays: [VacationDay]
 
     @State private var selectedYear = Calendar.zurich.component(.year, from: Date())
     @State private var lastClickedDate: Date?
+    @State private var mode: AbsenceType = .vacation
 
     private let yearRange = 2026...2036
 
-    private var vacationDaysForYear: [VacationDay] {
+    private var absencesForYear: [VacationDay] {
         allVacationDays.filter { Calendar.zurich.component(.year, from: $0.date) == selectedYear }
+    }
+
+    private var vacationDaysForYear: [VacationDay] {
+        absencesForYear.filter { $0.resolvedType == .vacation }
+    }
+
+    private var sickDaysForYear: [VacationDay] {
+        absencesForYear.filter { $0.resolvedType == .sick }
     }
 
     /// Vacation day count: manual half-days and holiday half-days both count as 0.5
@@ -25,6 +34,13 @@ struct VacationView: View {
                 return total + 0.5
             }
             return total + 1.0
+        }
+    }
+
+    /// Sick day count: half-days count as 0.5
+    private var sickCount: Double {
+        sickDaysForYear.reduce(0.0) { total, vd in
+            total + (vd.isHalfDay ? 0.5 : 1.0)
         }
     }
 
@@ -42,13 +58,9 @@ struct VacationView: View {
 
     private var eligibleDaySet: Set<Date> { Set(eligibleDays) }
 
-    private var vacationDateSet: Set<Date> {
-        Set(vacationDaysForYear.map { $0.date.startOfDayZurich })
-    }
-
-    /// Lookup: date → VacationDay for quick access to isHalfDay
-    private var vacationDayLookup: [Date: VacationDay] {
-        Dictionary(uniqueKeysWithValues: vacationDaysForYear.map { ($0.date.startOfDayZurich, $0) })
+    /// Lookup: date → VacationDay for quick access to type/isHalfDay
+    private var absenceLookup: [Date: VacationDay] {
+        Dictionary(uniqueKeysWithValues: absencesForYear.map { ($0.date.startOfDayZurich, $0) })
     }
 
     private var monthGroups: [(month: String, days: [Date])] {
@@ -66,7 +78,7 @@ struct VacationView: View {
             // Header
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Vacation")
+                    Text("Absences")
                         .font(.title2.bold())
                     HStack(spacing: 4) {
                         Text("Year")
@@ -82,36 +94,60 @@ struct VacationView: View {
 
                 Spacer()
 
-                // Counter
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(formatDays(vacationCount)) / 25 days")
-                        .font(.title3.bold().monospacedDigit())
-                        .foregroundStyle(vacationCount > 25 ? .red : .primary)
-                    let remaining = 25.0 - vacationCount
-                    if remaining >= 0 {
-                        Text("\(formatDays(remaining)) remaining")
+                // Counter — varies by mode
+                if mode == .vacation {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(formatDays(vacationCount)) / 25 days")
+                            .font(.title3.bold().monospacedDigit())
+                            .foregroundStyle(vacationCount > 25 ? .red : .primary)
+                        let remaining = 25.0 - vacationCount
+                        if remaining >= 0 {
+                            Text("\(formatDays(remaining)) remaining")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("\(formatDays(abs(remaining))) over budget")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
+                } else {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(formatDays(sickCount)) sick days")
+                            .font(.title3.bold().monospacedDigit())
+                            .foregroundStyle(.primary)
+                        Text("this year")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    } else {
-                        Text("\(formatDays(abs(remaining))) over budget")
-                            .font(.caption)
-                            .foregroundStyle(.red)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
             }
             .padding(.horizontal, 24)
             .padding(.top, 20)
-            .padding(.bottom, 16)
+            .padding(.bottom, 12)
+
+            // Mode toggle
+            Picker("", selection: $mode) {
+                Label("Vacation", systemImage: "airplane").tag(AbsenceType.vacation)
+                Label("Sick", systemImage: "thermometer.medium").tag(AbsenceType.sick)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 24)
+            .padding(.bottom, 12)
 
             // Hint
             HStack(spacing: 6) {
                 Image(systemName: "info.circle")
                     .foregroundStyle(.blue)
                     .font(.caption)
-                Text("Click: full day → half day → remove. **Shift+click** to select a range.")
+                Text(hintText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -133,8 +169,7 @@ struct VacationView: View {
                                 ForEach(group.days, id: \.self) { date in
                                     DayCell(
                                         date: date,
-                                        isVacation: vacationDateSet.contains(date),
-                                        isHalfDayVacation: vacationDayLookup[date]?.isHalfDay == true,
+                                        absence: absenceLookup[date],
                                         isHalfDayHoliday: holidayLookup[date] == .halfDay,
                                         isLastClicked: lastClickedDate == date
                                     ) { isShift in
@@ -153,24 +188,37 @@ struct VacationView: View {
                 .padding(.vertical, 16)
             }
         }
-        .navigationTitle("Vacation")
+        .navigationTitle("Absences")
+    }
+
+    private var hintText: LocalizedStringKey {
+        switch mode {
+        case .vacation:
+            return "Click: full day → half day → remove. **Shift+click** to select a range. Click a sick day to convert it to vacation."
+        case .sick:
+            return "Click: full day → half day → remove. **Shift+click** to select a range. Click a vacation day to convert it to sick."
+        }
     }
 
     // MARK: - Actions
 
     private func handleClick(date: Date) {
         let normalized = date.startOfDayZurich
-        if let existing = vacationDaysForYear.first(where: { $0.date.isSameDay(as: normalized) }) {
-            if !existing.isHalfDay {
-                // Full day → half day
+        if let existing = absencesForYear.first(where: { $0.date.isSameDay(as: normalized) }) {
+            if existing.resolvedType != mode {
+                // Different type → overwrite as full of the selected mode
+                existing.type = mode
+                existing.isHalfDay = false
+            } else if !existing.isHalfDay {
+                // Same type, full → half
                 existing.isHalfDay = true
             } else {
-                // Half day → remove
+                // Same type, half → remove
                 modelContext.delete(existing)
             }
         } else {
-            // Not set → full day
-            modelContext.insert(VacationDay(date: normalized))
+            // Not set → full of the selected mode
+            modelContext.insert(VacationDay(date: normalized, isHalfDay: false, type: mode))
         }
         lastClickedDate = normalized
     }
@@ -185,8 +233,14 @@ struct VacationView: View {
         let end = max(anchor, normalized)
         let rangeDays = start.daysThrough(end).filter { eligibleDaySet.contains($0) }
         for day in rangeDays {
-            if !vacationDateSet.contains(day) {
-                modelContext.insert(VacationDay(date: day))
+            if let existing = absencesForYear.first(where: { $0.date.isSameDay(as: day) }) {
+                // Convert other-type entries to selected mode (full); leave same-type alone
+                if existing.resolvedType != mode {
+                    existing.type = mode
+                    existing.isHalfDay = false
+                }
+            } else {
+                modelContext.insert(VacationDay(date: day, isHalfDay: false, type: mode))
             }
         }
         lastClickedDate = normalized
@@ -204,8 +258,7 @@ struct VacationView: View {
 
 struct DayCell: NSViewRepresentable {
     let date: Date
-    let isVacation: Bool
-    let isHalfDayVacation: Bool
+    let absence: VacationDay?
     let isHalfDayHoliday: Bool
     let isLastClicked: Bool
     let action: (Bool) -> Void  // Bool = isShiftHeld
@@ -229,8 +282,8 @@ struct DayCell: NSViewRepresentable {
         view.configure(
             dayText: "\(dayNum)",
             weekdayText: weekdayName,
-            isVacation: isVacation,
-            isHalfDayVacation: isHalfDayVacation,
+            absenceType: absence?.resolvedType,
+            isHalfDayAbsence: absence?.isHalfDay == true,
             isHalfDayHoliday: isHalfDayHoliday,
             isLastClicked: isLastClicked
         )
@@ -242,8 +295,8 @@ class DayCellNSView: NSView {
 
     private let weekdayLabel = NSTextField(labelWithString: "")
     private let dayLabel = NSTextField(labelWithString: "")
-    private var isVacation = false
-    private var isHalfDayVacation = false
+    private var absenceType: AbsenceType?
+    private var isHalfDayAbsence = false
     private var isHalfDayHoliday = false
     private var isLastClicked = false
     private var isHovered = false
@@ -282,31 +335,42 @@ class DayCellNSView: NSView {
         dayLabel.frame = NSRect(x: 0, y: 4, width: bounds.width, height: 16)
     }
 
-    func configure(dayText: String, weekdayText: String, isVacation: Bool, isHalfDayVacation: Bool, isHalfDayHoliday: Bool, isLastClicked: Bool) {
+    func configure(dayText: String, weekdayText: String, absenceType: AbsenceType?,
+                   isHalfDayAbsence: Bool, isHalfDayHoliday: Bool, isLastClicked: Bool) {
         dayLabel.stringValue = dayText
         weekdayLabel.stringValue = weekdayText
-        self.isVacation = isVacation
-        self.isHalfDayVacation = isHalfDayVacation
+        self.absenceType = absenceType
+        self.isHalfDayAbsence = isHalfDayAbsence
         self.isHalfDayHoliday = isHalfDayHoliday
         self.isLastClicked = isLastClicked
         updateColors()
     }
 
     private func updateColors() {
-        if isVacation && isHalfDayVacation {
-            // Half-day vacation: half-filled look
-            layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.4).cgColor
-            dayLabel.textColor = .white
-            weekdayLabel.textColor = .white.withAlphaComponent(0.8)
-            layer?.borderWidth = 2
-            layer?.borderColor = NSColor.systemBlue.cgColor
-        } else if isVacation {
-            // Full-day vacation
-            layer?.backgroundColor = NSColor.systemBlue.cgColor
-            dayLabel.textColor = .white
-            weekdayLabel.textColor = .white.withAlphaComponent(0.85)
-            layer?.borderWidth = isLastClicked ? 2 : 0
-            layer?.borderColor = NSColor.white.cgColor
+        let baseColor: NSColor? = {
+            switch absenceType {
+            case .vacation: return .systemBlue
+            case .sick: return .systemRed
+            case .none: return nil
+            }
+        }()
+
+        if let baseColor {
+            if isHalfDayAbsence {
+                // Half-day: lighter fill, colored border
+                layer?.backgroundColor = baseColor.withAlphaComponent(0.4).cgColor
+                dayLabel.textColor = .white
+                weekdayLabel.textColor = .white.withAlphaComponent(0.8)
+                layer?.borderWidth = 2
+                layer?.borderColor = baseColor.cgColor
+            } else {
+                // Full day
+                layer?.backgroundColor = baseColor.cgColor
+                dayLabel.textColor = .white
+                weekdayLabel.textColor = .white.withAlphaComponent(0.85)
+                layer?.borderWidth = isLastClicked ? 2 : 0
+                layer?.borderColor = NSColor.white.cgColor
+            }
         } else if isHovered {
             layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.12).cgColor
             dayLabel.textColor = .labelColor

@@ -33,18 +33,18 @@ struct OverviewView: View {
         min(today, yearEnd)
     }
 
-    private var vacationLookupForYear: [Date: Bool] {
-        var lookup: [Date: Bool] = [:]
+    private var absenceLookupForYear: [Date: AbsenceEntry] {
+        var lookup: [Date: AbsenceEntry] = [:]
         for vd in allVacationDays where Calendar.zurich.component(.year, from: vd.date) == selectedYear {
-            lookup[vd.date.startOfDayZurich] = vd.isHalfDay
+            lookup[vd.date.startOfDayZurich] = AbsenceEntry(type: vd.resolvedType, isHalfDay: vd.isHalfDay)
         }
         return lookup
     }
 
-    private var allVacationLookup: [Date: Bool] {
-        var lookup: [Date: Bool] = [:]
+    private var allAbsenceLookup: [Date: AbsenceEntry] {
+        var lookup: [Date: AbsenceEntry] = [:]
         for vd in allVacationDays {
-            lookup[vd.date.startOfDayZurich] = vd.isHalfDay
+            lookup[vd.date.startOfDayZurich] = AbsenceEntry(type: vd.resolvedType, isHalfDay: vd.isHalfDay)
         }
         return lookup
     }
@@ -55,42 +55,45 @@ struct OverviewView: View {
             timeZone: TimeZone(identifier: "Europe/Zurich"),
             year: selectedYear, month: 1, day: 1))!
         return calculator.periodSummary(from: yearStart, to: yearEnd,
-                                        vacationLookup: vacationLookupForYear, segments: allSegments)
+                                        absenceLookup: absenceLookupForYear, segments: allSegments)
     }
 
     // Balance up to today for the selected year
     private var toDateSummary: PeriodSummary {
         guard effectiveYearStart <= effectiveEnd else {
             return PeriodSummary(expectedHours: 0, actualHours: 0,
-                                workingDays: 0, holidayDays: 0, halfDayHolidays: 0, vacationDays: 0)
+                                workingDays: 0, holidayDays: 0, halfDayHolidays: 0,
+                                vacationDays: 0, sickDays: 0)
         }
         return calculator.periodSummary(from: effectiveYearStart, to: effectiveEnd,
-                                        vacationLookup: vacationLookupForYear, segments: allSegments)
+                                        absenceLookup: absenceLookupForYear, segments: allSegments)
     }
 
     // Full year projection
     private var fullYearSummary: PeriodSummary {
         guard effectiveYearStart <= yearEnd else {
             return PeriodSummary(expectedHours: 0, actualHours: 0,
-                                workingDays: 0, holidayDays: 0, halfDayHolidays: 0, vacationDays: 0)
+                                workingDays: 0, holidayDays: 0, halfDayHolidays: 0,
+                                vacationDays: 0, sickDays: 0)
         }
         return calculator.periodSummary(from: effectiveYearStart, to: yearEnd,
-                                        vacationLookup: vacationLookupForYear, segments: allSegments)
+                                        absenceLookup: absenceLookupForYear, segments: allSegments)
     }
 
     // Cumulative from tracking start through today
     private var cumulativeSummary: PeriodSummary {
         guard trackingStartDate <= today else {
             return PeriodSummary(expectedHours: 0, actualHours: 0,
-                                workingDays: 0, holidayDays: 0, halfDayHolidays: 0, vacationDays: 0)
+                                workingDays: 0, holidayDays: 0, halfDayHolidays: 0,
+                                vacationDays: 0, sickDays: 0)
         }
         return calculator.periodSummary(from: trackingStartDate, to: today,
-                                        vacationLookup: allVacationLookup, segments: allSegments)
+                                        absenceLookup: allAbsenceLookup, segments: allSegments)
     }
 
     private var monthlyData: [MonthSummary] {
         calculator.monthlyBreakdown(year: selectedYear,
-                                    vacationLookup: vacationLookupForYear,
+                                    absenceLookup: absenceLookupForYear,
                                     segments: allSegments,
                                     startDate: trackingStartDate,
                                     endDate: today)
@@ -213,6 +216,13 @@ struct OverviewView: View {
                              text: "\(formatVacationDays(fullCalendarYearSummary.vacationDays))/25 vacation days",
                              color: .blue)
                         .help("Vacation days used this year (Jan–Dec). Half-day holidays count as 0.5 days.")
+
+                    if fullCalendarYearSummary.sickDays > 0 {
+                        infoPill(icon: "thermometer.medium",
+                                 text: "\(formatVacationDays(fullCalendarYearSummary.sickDays)) sick days",
+                                 color: .red)
+                            .help("Sick days used this year. Treated as full work days — no balance impact.")
+                    }
                 }
 
                 // Monthly breakdown

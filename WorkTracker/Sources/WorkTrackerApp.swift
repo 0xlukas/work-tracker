@@ -8,23 +8,16 @@ struct WorkTrackerApp: App {
     init() {
         let storeURL = AppSettings.dataStoreURL
         let config = ModelConfiguration(url: storeURL)
+        let schema = Schema(versionedSchema: WorkTrackerSchemaV2.self)
         do {
-            modelContainer = try ModelContainer(for: Project.self, WorkSegment.self, VacationDay.self,
-                                                configurations: config)
+            modelContainer = try ModelContainer(
+                for: schema,
+                migrationPlan: WorkTrackerMigrationPlan.self,
+                configurations: config
+            )
         } catch {
-            // Schema migration failed — delete old store and retry
-            print("ModelContainer failed: \(error). Deleting old store and retrying.")
-            let fm = FileManager.default
-            let basePath = storeURL.path
-            for suffix in ["", "-wal", "-shm"] {
-                try? fm.removeItem(atPath: basePath + suffix)
-            }
-            do {
-                modelContainer = try ModelContainer(for: Project.self, WorkSegment.self, VacationDay.self,
-                                                    configurations: config)
-            } catch {
-                fatalError("Failed to create ModelContainer after reset: \(error)")
-            }
+            fatalError("Failed to open WorkTracker store: \(error). " +
+                       "Refusing to wipe — back up your store and report this.")
         }
     }
 
