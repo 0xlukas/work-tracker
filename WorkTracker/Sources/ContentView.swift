@@ -21,12 +21,14 @@ enum NavigationItem: String, CaseIterable, Identifiable {
 struct ContentView: View {
     @State private var selection: NavigationItem? = .dailyEntry
     @State private var showDailyQuote = false
+    // Re-reads on change so switching language in Settings rebuilds the UI (via .id).
+    @AppStorage(Localization.storageKey) private var appLanguage: AppLanguage = .system
 
     var body: some View {
         ZStack {
             NavigationSplitView {
                 List(NavigationItem.allCases, selection: $selection) { item in
-                    Label(item.rawValue, systemImage: item.icon)
+                    Label(tr(item.rawValue), systemImage: item.icon)
                         .tag(item)
                 }
                 .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
@@ -41,11 +43,12 @@ struct ContentView: View {
                 case .overview:
                     OverviewView()
                 case nil:
-                    Text("Select an item from the sidebar")
+                    Text(tr("Select an item from the sidebar"))
                         .foregroundStyle(.secondary)
                 }
             }
             .frame(minWidth: 800, minHeight: 600)
+            .id(appLanguage)
 
             if showDailyQuote {
                 DailyQuoteOverlayView(quote: DailyQuote.quoteOfTheDay()) {

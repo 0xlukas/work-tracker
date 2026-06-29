@@ -12,6 +12,7 @@ struct ProjectsView: View {
     @State private var showDeleteError = false
     @State private var deleteErrorMessage = ""
     @State private var hoveredProject: Project?
+    @State private var projectPendingDelete: Project?
 
     @State private var reportFrom: Date = Calendar.zurich.date(from: DateComponents(
         timeZone: TimeZone(identifier: "Europe/Zurich"),
@@ -26,9 +27,9 @@ struct ProjectsView: View {
             // Left: Projects
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Projects")
+                    Text(tr("Projects"))
                         .font(.title2.bold())
-                    Text("\(projects.count) project\(projects.count == 1 ? "" : "s")")
+                    Text(tr(projects.count == 1 ? "%lld project" : "%lld projects", projects.count))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -53,7 +54,7 @@ struct ProjectsView: View {
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.blue)
                         .font(.title3)
-                    TextField("Add new project...", text: $newProjectName)
+                    TextField(tr("Add new project..."), text: $newProjectName)
                         .textFieldStyle(.plain)
                         .onSubmit { addProject() }
                 }
@@ -67,9 +68,9 @@ struct ProjectsView: View {
             // Right: Time Report
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Time Report")
+                    Text(tr("Time Report"))
                         .font(.title2.bold())
-                    Text("Hours per project")
+                    Text(tr("Hours per project"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -80,14 +81,14 @@ struct ProjectsView: View {
                 // Date range
                 HStack(spacing: 16) {
                     HStack(spacing: 8) {
-                        Text("From")
+                        Text(tr("From"))
                             .foregroundStyle(.secondary)
                             .font(.subheadline)
                         DatePicker("", selection: $reportFrom, displayedComponents: .date)
                             .labelsHidden()
                     }
                     HStack(spacing: 8) {
-                        Text("To")
+                        Text(tr("To"))
                             .foregroundStyle(.secondary)
                             .font(.subheadline)
                         DatePicker("", selection: $reportTo, displayedComponents: .date)
@@ -109,7 +110,7 @@ struct ProjectsView: View {
                         Image(systemName: "chart.bar")
                             .font(.system(size: 32))
                             .foregroundStyle(.quaternary)
-                        Text("No work logged in this period")
+                        Text(tr("No work logged in this period"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -127,10 +128,10 @@ struct ProjectsView: View {
 
                         let totalHours = breakdown.reduce(0) { $0 + $1.hours }
                         HStack {
-                            Text("Total")
+                            Text(tr("Total"))
                                 .font(.subheadline.bold())
                             Spacer()
-                            Text(formatHours(totalHours))
+                            Text(TimeFormatting.hours(totalHours))
                                 .font(.body.bold().monospacedDigit())
                         }
                         .padding(.horizontal, 24)
@@ -141,11 +142,27 @@ struct ProjectsView: View {
             }
             .frame(minWidth: 360)
         }
-        .navigationTitle("Projects")
-        .alert("Cannot Delete", isPresented: $showDeleteError) {
-            Button("OK") {}
+        .navigationTitle(tr("Projects"))
+        .alert(tr("Cannot Delete"), isPresented: $showDeleteError) {
+            Button(tr("OK")) {}
         } message: {
             Text(deleteErrorMessage)
+        }
+        .confirmationDialog(
+            tr("Delete this project?"),
+            isPresented: Binding(
+                get: { projectPendingDelete != nil },
+                set: { if !$0 { projectPendingDelete = nil } }
+            ),
+            presenting: projectPendingDelete
+        ) { project in
+            Button(tr("Delete"), role: .destructive) {
+                modelContext.delete(project)
+                projectPendingDelete = nil
+            }
+            Button(tr("Cancel"), role: .cancel) { projectPendingDelete = nil }
+        } message: { project in
+            Text(tr("'%@' will be removed.", project.name))
         }
     }
 
@@ -155,13 +172,13 @@ struct ProjectsView: View {
     private func projectRow(_ project: Project) -> some View {
         if editingProject?.id == project.id {
             HStack(spacing: 8) {
-                TextField("Project name", text: $editName)
+                TextField(tr("Project name"), text: $editName)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { saveEdit(project) }
-                Button("Save") { saveEdit(project) }
+                Button(tr("Save")) { saveEdit(project) }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                Button("Cancel") { editingProject = nil }
+                Button(tr("Cancel")) { editingProject = nil }
                     .controlSize(.small)
             }
             .padding(.horizontal, 8)
@@ -169,18 +186,18 @@ struct ProjectsView: View {
         } else {
             HStack(spacing: 12) {
                 Circle()
-                    .fill(.blue.opacity(0.15))
+                    .fill(projectColor(project).opacity(0.15))
                     .frame(width: 32, height: 32)
                     .overlay {
                         Text(String(project.name.prefix(1)).uppercased())
                             .font(.subheadline.bold())
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(projectColor(project))
                     }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(project.name)
                         .font(.body)
-                    Text("\(project.segments.count) entries")
+                    Text(tr(project.segments.count == 1 ? "%lld entry" : "%lld entries", project.segments.count))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -197,13 +214,17 @@ struct ProjectsView: View {
                                 .font(.caption)
                         }
                         .buttonStyle(.borderless)
+                        .help(tr("Rename project"))
+                        .accessibilityLabel(tr("Rename project"))
 
-                        Button { deleteProject(project) } label: {
+                        Button { requestDelete(project) } label: {
                             Image(systemName: "trash")
                                 .font(.caption)
                                 .foregroundStyle(.red)
                         }
                         .buttonStyle(.borderless)
+                        .help(tr("Delete project"))
+                        .accessibilityLabel(tr("Delete project"))
                     }
                     .transition(.opacity)
                 }
@@ -214,12 +235,32 @@ struct ProjectsView: View {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(hoveredProject?.id == project.id ? Color.primary.opacity(0.05) : Color.clear)
             )
+            .contentShape(Rectangle())
             .onHover { isHovered in
                 withAnimation(.easeInOut(duration: 0.15)) {
                     hoveredProject = isHovered ? project : nil
                 }
             }
+            .onTapGesture(count: 2) {
+                editingProject = project
+                editName = project.name
+            }
+            .contextMenu {
+                Button {
+                    editingProject = project
+                    editName = project.name
+                } label: { Label(tr("Rename"), systemImage: "pencil") }
+                Button(role: .destructive) { requestDelete(project) } label: {
+                    Label(tr("Delete"), systemImage: "trash")
+                }
+            }
         }
+    }
+
+    private func projectColor(_ project: Project) -> Color {
+        let palette: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo, .red, .mint, .cyan]
+        let sum = project.name.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return palette[sum % palette.count]
     }
 
     // MARK: - Report Row
@@ -230,18 +271,18 @@ struct ProjectsView: View {
                 Text(item.project.name)
                     .font(.subheadline)
                 Spacer()
-                Text(formatHours(item.hours))
+                Text(TimeFormatting.hours(item.hours))
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
 
             GeometryReader { geo in
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(.blue.opacity(0.2))
+                    .fill(projectColor(item.project).opacity(0.2))
                     .frame(height: 6)
                     .overlay(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(.blue)
+                            .fill(projectColor(item.project))
                             .frame(width: geo.size.width * (item.hours / maxHours))
                     }
             }
@@ -266,18 +307,13 @@ struct ProjectsView: View {
         editingProject = nil
     }
 
-    private func deleteProject(_ project: Project) {
+    private func requestDelete(_ project: Project) {
         if project.segments.isEmpty {
-            modelContext.delete(project)
+            projectPendingDelete = project
         } else {
-            deleteErrorMessage = "'\(project.name)' has \(project.segments.count) time entries. Delete or reassign them first."
+            deleteErrorMessage = tr("'%@' has %lld time entries. Delete or reassign them first.", project.name, project.segments.count)
             showDeleteError = true
         }
     }
 
-    private func formatHours(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int(((hours - Double(h)) * 60).rounded())
-        return String(format: "%dh %02dm", h, m)
-    }
 }

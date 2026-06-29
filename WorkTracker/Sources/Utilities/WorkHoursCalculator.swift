@@ -40,7 +40,7 @@ struct MonthSummary: Identifiable {
 
     var monthName: String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "de_CH")
+        formatter.locale = Locale.current
         return formatter.monthSymbols[month - 1].capitalized
     }
 }

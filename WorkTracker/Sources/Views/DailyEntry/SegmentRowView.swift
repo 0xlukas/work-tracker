@@ -32,7 +32,7 @@ struct SegmentRowView: View {
 
             Spacer()
 
-            Text(formatHours(segment.durationHours))
+            Text(TimeFormatting.hours(segment.durationHours))
                 .font(.subheadline.monospacedDigit())
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
@@ -45,6 +45,8 @@ struct SegmentRowView: View {
                             .font(.caption)
                     }
                     .buttonStyle(.borderless)
+                    .help(tr("Edit entry"))
+                    .accessibilityLabel(tr("Edit entry"))
 
                     Button { onDelete() } label: {
                         Image(systemName: "trash")
@@ -52,6 +54,8 @@ struct SegmentRowView: View {
                             .foregroundStyle(.red)
                     }
                     .buttonStyle(.borderless)
+                    .help(tr("Delete entry"))
+                    .accessibilityLabel(tr("Delete entry"))
                 }
                 .transition(.opacity)
             }
@@ -62,16 +66,23 @@ struct SegmentRowView: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
         )
+        .contentShape(Rectangle())
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
         }
-    }
-
-    private func formatHours(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int(((hours - Double(h)) * 60).rounded())
-        return String(format: "%dh %02dm", h, m)
+        // Double-click to edit; right-click for keyboard/VoiceOver-reachable actions.
+        .onTapGesture(count: 2) { onEdit() }
+        .contextMenu {
+            Button { onEdit() } label: { Label(tr("Edit Entry"), systemImage: "pencil") }
+            Button(role: .destructive) { onDelete() } label: { Label(tr("Delete Entry"), systemImage: "trash") }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(tr("Time entry %@ to %@, %@",
+                               TimeField.format(segment.startTime),
+                               TimeField.format(segment.endTime),
+                               TimeFormatting.hours(segment.durationHours))
+                            + (segment.project.map { ", \($0.name)" } ?? ""))
     }
 }

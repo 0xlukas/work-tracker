@@ -14,6 +14,8 @@ struct AbsencesView: View {
 
     private let yearRange = 2026...2036
 
+    private var entitlement: Double { AppSettings.vacationEntitlement }
+
     private var absencesForYear: [VacationDay] {
         allVacationDays.filter { Calendar.zurich.component(.year, from: $0.date) == selectedYear }
     }
@@ -66,7 +68,7 @@ struct AbsencesView: View {
     private var monthGroups: [(month: String, days: [Date])] {
         let cal = Calendar.zurich
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "de_CH")
+        formatter.locale = Locale.current
         let grouped = Dictionary(grouping: eligibleDays) { cal.component(.month, from: $0) }
         return grouped.sorted { $0.key < $1.key }.map { (month, days) in
             (month: formatter.monthSymbols[month - 1].capitalized, days: days.sorted())
@@ -78,10 +80,10 @@ struct AbsencesView: View {
             // Header
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Absences")
+                    Text(tr("Absences"))
                         .font(.title2.bold())
                     HStack(spacing: 4) {
-                        Text("Year")
+                        Text(tr("Year"))
                             .foregroundStyle(.secondary)
                         Picker("", selection: $selectedYear) {
                             ForEach(yearRange, id: \.self) { Text(String($0)).tag($0) }
@@ -97,16 +99,16 @@ struct AbsencesView: View {
                 // Counter — varies by mode
                 if mode == .vacation {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(formatDays(vacationCount)) / 25 days")
+                        Text(tr("%@ / %@ days", TimeFormatting.days(vacationCount), TimeFormatting.days(entitlement)))
                             .font(.title3.bold().monospacedDigit())
-                            .foregroundStyle(vacationCount > 25 ? .red : .primary)
-                        let remaining = 25.0 - vacationCount
+                            .foregroundStyle(vacationCount > entitlement ? .red : .primary)
+                        let remaining = entitlement - vacationCount
                         if remaining >= 0 {
-                            Text("\(formatDays(remaining)) remaining")
+                            Text(tr("%@ remaining", TimeFormatting.days(remaining)))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         } else {
-                            Text("\(formatDays(abs(remaining))) over budget")
+                            Text(tr("%@ over budget", TimeFormatting.days(abs(remaining))))
                                 .font(.caption)
                                 .foregroundStyle(.red)
                         }
@@ -116,10 +118,10 @@ struct AbsencesView: View {
                     .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
                 } else {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(formatDays(sickCount)) sick days")
+                        Text(tr("%@ sick days", TimeFormatting.days(sickCount)))
                             .font(.title3.bold().monospacedDigit())
                             .foregroundStyle(.primary)
-                        Text("this year")
+                        Text(tr("this year"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -134,8 +136,8 @@ struct AbsencesView: View {
 
             // Mode toggle
             Picker("", selection: $mode) {
-                Label("Vacation", systemImage: "airplane").tag(AbsenceType.vacation)
-                Label("Sick", systemImage: "thermometer.medium").tag(AbsenceType.sick)
+                Label(tr("Vacation"), systemImage: "airplane").tag(AbsenceType.vacation)
+                Label(tr("Sick"), systemImage: "thermometer.medium").tag(AbsenceType.sick)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -147,7 +149,7 @@ struct AbsencesView: View {
                 Image(systemName: "info.circle")
                     .foregroundStyle(.blue)
                     .font(.caption)
-                Text(hintText)
+                Text(LocalizedStringKey(hintText))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -188,15 +190,15 @@ struct AbsencesView: View {
                 .padding(.vertical, 16)
             }
         }
-        .navigationTitle("Absences")
+        .navigationTitle(tr("Absences"))
     }
 
-    private var hintText: LocalizedStringKey {
+    private var hintText: String {
         switch mode {
         case .vacation:
-            return "Click: full day → half day → remove. **Shift+click** to select a range. Click a sick day to convert it to vacation."
+            return tr("Click: full day → half day → remove. **Shift+click** to select a range. Click a sick day to convert it to vacation.")
         case .sick:
-            return "Click: full day → half day → remove. **Shift+click** to select a range. Click a vacation day to convert it to sick."
+            return tr("Click: full day → half day → remove. **Shift+click** to select a range. Click a vacation day to convert it to sick.")
         }
     }
 
@@ -246,12 +248,6 @@ struct AbsencesView: View {
         lastClickedDate = normalized
     }
 
-    private func formatDays(_ days: Double) -> String {
-        if days == days.rounded() {
-            return "\(Int(days))"
-        }
-        return String(format: "%.1f", days)
-    }
 }
 
 // MARK: - Day Cell (NSViewRepresentable for reliable clicks)
@@ -295,6 +291,7 @@ class DayCellNSView: NSView {
 
     private let weekdayLabel = NSTextField(labelWithString: "")
     private let dayLabel = NSTextField(labelWithString: "")
+    private let iconView = NSImageView()
     private var absenceType: AbsenceType?
     private var isHalfDayAbsence = false
     private var isHalfDayHoliday = false
@@ -306,20 +303,28 @@ class DayCellNSView: NSView {
         wantsLayer = true
         layer?.cornerRadius = 6
 
-        weekdayLabel.font = .systemFont(ofSize: 9)
+        // Dynamic Type: size tracks the user's text-size setting.
+        weekdayLabel.font = .preferredFont(forTextStyle: .caption2)
         weekdayLabel.alignment = .center
         weekdayLabel.isBezeled = false
         weekdayLabel.drawsBackground = false
         weekdayLabel.isEditable = false
 
-        dayLabel.font = .boldSystemFont(ofSize: 11)
+        dayLabel.font = .systemFont(ofSize: NSFont.preferredFont(forTextStyle: .body).pointSize, weight: .bold)
         dayLabel.alignment = .center
         dayLabel.isBezeled = false
         dayLabel.drawsBackground = false
         dayLabel.isEditable = false
 
+        iconView.imageScaling = .scaleProportionallyDown
+        iconView.isHidden = true
+
         addSubview(weekdayLabel)
         addSubview(dayLabel)
+        addSubview(iconView)
+
+        setAccessibilityRole(.button)
+        setAccessibilityElement(true)
 
         let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self)
         addTrackingArea(area)
@@ -333,6 +338,7 @@ class DayCellNSView: NSView {
         super.layout()
         weekdayLabel.frame = NSRect(x: 0, y: 20, width: bounds.width, height: 14)
         dayLabel.frame = NSRect(x: 0, y: 4, width: bounds.width, height: 16)
+        iconView.frame = NSRect(x: bounds.width - 14, y: bounds.height - 14, width: 11, height: 11)
     }
 
     func configure(dayText: String, weekdayText: String, absenceType: AbsenceType?,
@@ -343,6 +349,28 @@ class DayCellNSView: NSView {
         self.isHalfDayAbsence = isHalfDayAbsence
         self.isHalfDayHoliday = isHalfDayHoliday
         self.isLastClicked = isLastClicked
+
+        // Shape cue so absence type is distinguishable without relying on colour.
+        switch absenceType {
+        case .vacation:
+            iconView.image = NSImage(systemSymbolName: "airplane", accessibilityDescription: tr("Vacation"))
+            iconView.isHidden = false
+        case .sick:
+            iconView.image = NSImage(systemSymbolName: "cross.case.fill", accessibilityDescription: tr("Sick"))
+            iconView.isHidden = false
+        case .none:
+            iconView.image = nil
+            iconView.isHidden = true
+        }
+
+        let stateText: String
+        switch absenceType {
+        case .vacation: stateText = isHalfDayAbsence ? tr("half-day vacation") : tr("vacation")
+        case .sick: stateText = isHalfDayAbsence ? tr("half-day sick") : tr("sick")
+        case .none: stateText = isHalfDayHoliday ? tr("half-day holiday") : tr("no absence")
+        }
+        setAccessibilityLabel(tr("%@ %@, %@", weekdayText, dayText, stateText))
+
         updateColors()
     }
 
@@ -354,6 +382,8 @@ class DayCellNSView: NSView {
             case .none: return nil
             }
         }()
+
+        iconView.contentTintColor = .white
 
         if let baseColor {
             if isHalfDayAbsence {

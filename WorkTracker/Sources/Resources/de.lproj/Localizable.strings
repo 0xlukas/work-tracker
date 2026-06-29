@@ -1,0 +1,163 @@
+/* WorkTracker — German (Swiss orthography: "ss" not "ß", "Ferien" for vacation) */
+
+/* Navigation & app-wide */
+"Daily Entry" = "Tageserfassung";
+"Projects" = "Projekte";
+"Absences" = "Abwesenheiten";
+"Overview" = "Übersicht";
+"Select an item from the sidebar" = "Wählen Sie einen Eintrag in der Seitenleiste";
+
+/* Daily Entry */
+"Add Entry" = "Eintrag hinzufügen";
+"Today" = "Heute";
+"Add a time entry (⌘N)" = "Zeiteintrag hinzufügen (⌘N)";
+"Jump to today (⌘T)" = "Zu heute springen (⌘T)";
+"No time entries yet" = "Noch keine Zeiteinträge";
+"Click \"Add Entry\" or press ⌘N to log your work" = "Klicken Sie auf «Eintrag hinzufügen» oder drücken Sie ⌘N, um Ihre Arbeit zu erfassen";
+"This Week" = "Diese Woche";
+"Weekend" = "Wochenende";
+"Vacation" = "Ferien";
+"Sick day" = "Krankheitstag";
+"Sick (half day)" = "Krank (halber Tag)";
+"Vacation (half day)" = "Ferien (halber Tag)";
+"%@ (half day)" = "%@ (halber Tag)";
+"of %@ expected" = "von %@ erwartet";
+"· +%@ over" = "· +%@ über Soll";
+
+/* Entry sheet */
+"New Time Entry" = "Neuer Zeiteintrag";
+"Edit Time Entry" = "Zeiteintrag bearbeiten";
+"Date" = "Datum";
+"Start" = "Beginn";
+"End" = "Ende";
+"Project" = "Projekt";
+"Duration" = "Dauer";
+"Cancel" = "Abbrechen";
+"Save" = "Speichern";
+"Add" = "Hinzufügen";
+"End time must be after start time." = "Die Endzeit muss nach der Startzeit liegen.";
+"An entry can’t cross midnight — split it into two entries." = "Ein Eintrag darf nicht über Mitternacht gehen — teilen Sie ihn in zwei Einträge auf.";
+"Overlaps with %@–%@." = "Überschneidet sich mit %@–%@.";
+"Type to search…" = "Zum Suchen tippen …";
+
+/* Projects */
+"%lld project" = "%lld Projekt";
+"%lld projects" = "%lld Projekte";
+"Add new project..." = "Neues Projekt hinzufügen …";
+"Project name" = "Projektname";
+"Rename" = "Umbenennen";
+"Delete" = "Löschen";
+"Rename project" = "Projekt umbenennen";
+"Delete project" = "Projekt löschen";
+"%lld entry" = "%lld Eintrag";
+"%lld entries" = "%lld Einträge";
+"Time Report" = "Zeitauswertung";
+"Hours per project" = "Stunden pro Projekt";
+"From" = "Von";
+"To" = "Bis";
+"No work logged in this period" = "In diesem Zeitraum keine Arbeit erfasst";
+"Total" = "Total";
+"Cannot Delete" = "Löschen nicht möglich";
+"'%@' has %lld time entries. Delete or reassign them first." = "«%@» hat %lld Zeiteinträge. Löschen oder verschieben Sie diese zuerst.";
+"OK" = "OK";
+"Delete this entry?" = "Diesen Eintrag löschen?";
+"%@–%@ · %@ will be removed. This can’t be undone." = "%@–%@ · %@ wird entfernt. Dies kann nicht rückgängig gemacht werden.";
+"Delete this project?" = "Dieses Projekt löschen?";
+"'%@' will be removed." = "«%@» wird entfernt.";
+
+/* Segment row actions & accessibility */
+"Edit Entry" = "Eintrag bearbeiten";
+"Delete Entry" = "Eintrag löschen";
+"Edit entry" = "Eintrag bearbeiten";
+"Delete entry" = "Eintrag löschen";
+"Time entry %@ to %@, %@" = "Zeiteintrag %@ bis %@, %@";
+
+/* Overview */
+"Year" = "Jahr";
+"Export CSV" = "CSV exportieren";
+"Export a day-by-day report for %@ as a CSV file" = "Tagesbericht für %@ als CSV-Datei exportieren";
+"Right Now" = "Aktuell";
+"This Month" = "Dieser Monat";
+"Tracking since" = "Erfassung seit";
+"Done" = "Fertig";
+"Expected (to date)" = "Soll (bis heute)";
+"%lld working days" = "%lld Arbeitstage";
+"Worked (to date)" = "Geleistet (bis heute)";
+"Current Balance" = "Aktueller Saldo";
+"All-time Balance" = "Gesamtsaldo";
+"overtime" = "Überstunden";
+"undertime" = "Minusstunden";
+"Full year target: %@" = "Jahresziel: %@";
+"Remaining: %@" = "Verbleibend: %@";
+"%lld public holidays" = "%lld Feiertage";
+"%lld half-day holidays" = "%lld Halbtags-Feiertage";
+"%@/%@ vacation days" = "%@/%@ Ferientage";
+"%@ sick days" = "%@ Krankheitstage";
+"Monthly Breakdown" = "Monatsübersicht";
+"%@ vs %@" = "%@ vs. %@";
+"Full days off (0h expected) — e.g. Karfreitag, Weihnachten, Bundesfeier" = "Ganze freie Tage (0 Std. Soll) — z. B. Karfreitag, Weihnachten, Bundesfeier";
+"Half days off (4h expected) — Sechseläuten, Knabenschiessen, Silvester" = "Halbe freie Tage (4 Std. Soll) — Sechseläuten, Knabenschiessen, Silvester";
+"Vacation days used this year (Jan–Dec). Half-day holidays count as 0.5 days." = "In diesem Jahr (Jan–Dez) genutzte Ferientage. Halbtags-Feiertage zählen als 0,5 Tage.";
+"Sick days used this year. Treated as full work days — no balance impact." = "In diesem Jahr genutzte Krankheitstage. Gelten als volle Arbeitstage — kein Einfluss auf den Saldo.";
+
+/* Monthly breakdown table */
+"Month" = "Monat";
+"Expected" = "Soll";
+"Worked" = "Geleistet";
+"Balance" = "Saldo";
+
+/* Absences */
+"%@ / %@ days" = "%@ / %@ Tage";
+"%@ remaining" = "%@ verbleibend";
+"%@ over budget" = "%@ über Budget";
+"this year" = "dieses Jahr";
+"Sick" = "Krank";
+"Click: full day → half day → remove. **Shift+click** to select a range. Click a sick day to convert it to vacation." = "Klicken: ganzer Tag → halber Tag → entfernen. **Shift+Klick** für einen Bereich. Klicken Sie auf einen Krankheitstag, um ihn in Ferien umzuwandeln.";
+"Click: full day → half day → remove. **Shift+click** to select a range. Click a vacation day to convert it to sick." = "Klicken: ganzer Tag → halber Tag → entfernen. **Shift+Klick** für einen Bereich. Klicken Sie auf einen Ferientag, um ihn in Krank umzuwandeln.";
+
+/* Day-cell accessibility states */
+"vacation" = "Ferien";
+"half-day vacation" = "halbtags Ferien";
+"sick" = "krank";
+"half-day sick" = "halbtags krank";
+"half-day holiday" = "Halbtags-Feiertag";
+"no absence" = "keine Abwesenheit";
+"%@ %@, %@" = "%@ %@, %@";
+
+/* Daily quote overlay */
+"Press any key, or click anywhere, to start your day" = "Drücken Sie eine Taste oder klicken Sie irgendwohin, um Ihren Tag zu beginnen";
+"Dismiss (Esc)" = "Schliessen (Esc)";
+"Dismiss quote" = "Zitat schliessen";
+
+/* Settings */
+"Annual vacation entitlement" = "Jährlicher Ferienanspruch";
+"%@ days" = "%@ Tage";
+"Used for the “X / Y days” budget in Absences and Overview." = "Wird für das Budget «X / Y Tage» in Abwesenheiten und Übersicht verwendet.";
+"Daily Quote" = "Tägliches Zitat";
+"Show an inspirational quote on launch" = "Beim Start ein inspirierendes Zitat anzeigen";
+"Data Storage Location" = "Speicherort der Daten";
+"Choose where your work tracker data is stored. Use a cloud folder (e.g. Google Drive) to back up automatically. Your existing data is copied to the new location automatically." = "Wählen Sie, wo die Daten gespeichert werden. Verwenden Sie einen Cloud-Ordner (z. B. Google Drive) für automatische Backups. Ihre bestehenden Daten werden automatisch an den neuen Ort kopiert.";
+"Default (Application Support)" = "Standard (Application Support)";
+"Custom location" = "Eigener Ort";
+"Choose Folder..." = "Ordner wählen …";
+"Reset to Default" = "Auf Standard zurücksetzen";
+"Tracking Start Date" = "Startdatum der Erfassung";
+"Start date" = "Startdatum";
+"Language" = "Sprache";
+"Restart Required" = "Neustart erforderlich";
+"Please quit and reopen the app for the new storage location to take effect. Your data was copied to the new location." = "Bitte beenden Sie die App und öffnen Sie sie erneut, damit der neue Speicherort wirksam wird. Ihre Daten wurden an den neuen Ort kopiert.";
+"Please quit and reopen the app for the new storage location to take effect. Your data could NOT be copied automatically — move WorkTracker.store from the old location to the new one manually before reopening." = "Bitte beenden Sie die App und öffnen Sie sie erneut, damit der neue Speicherort wirksam wird. Ihre Daten konnten NICHT automatisch kopiert werden — verschieben Sie WorkTracker.store manuell vom alten an den neuen Ort, bevor Sie die App erneut öffnen.";
+
+/* CSV export */
+"Weekday" = "Wochentag";
+"Expected hours" = "Soll-Stunden";
+"Worked hours" = "Ist-Stunden";
+"Balance hours" = "Saldo-Stunden";
+"Absence" = "Abwesenheit";
+"Vacation (half)" = "Ferien (halb)";
+"Sick (half)" = "Krank (halb)";
+"Holiday" = "Feiertag";
+"Export Time Report" = "Zeitbericht exportieren";
+
+/* AppKit panels */
+"Choose data storage folder" = "Ordner für die Datenspeicherung wählen";

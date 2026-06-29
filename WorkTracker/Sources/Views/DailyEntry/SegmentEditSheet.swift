@@ -5,60 +5,99 @@ struct SegmentEditSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Project.name) private var projects: [Project]
+    @Query(sort: \WorkSegment.startTime) private var allSegments: [WorkSegment]
 
-    let date: Date
     let segment: WorkSegment?
 
+    @State private var entryDate: Date
     @State private var startTime: Date
     @State private var endTime: Date
     @State private var selectedProject: Project?
-    @State private var showValidationError = false
-    @State private var validationMessage = ""
 
     var isEditing: Bool { segment != nil }
 
-    init(date: Date, segment: WorkSegment?) {
-        self.date = date
+    /// `suggestedStart` is the auto-filled start for a NEW entry — the end of the day's
+    /// last segment, or 08:10 when the day is empty (computed by the caller). Ignored
+    /// when editing an existing segment.
+    init(date: Date, segment: WorkSegment?, suggestedStart: Date? = nil) {
         self.segment = segment
 
         let cal = Calendar.zurich
-        if let segment = segment {
+        if let segment {
+            _entryDate = State(initialValue: segment.date)
             _startTime = State(initialValue: segment.startTime)
             _endTime = State(initialValue: segment.endTime)
             _selectedProject = State(initialValue: segment.project)
         } else {
-            let dayStart = cal.startOfDay(for: date)
-            _startTime = State(initialValue: cal.date(byAdding: .hour, value: 9, to: dayStart)!)
-            _endTime = State(initialValue: cal.date(byAdding: .hour, value: 17, to: dayStart)!)
+            let start = suggestedStart
+                ?? cal.date(bySettingHour: 8, minute: 10, second: 0, of: date)
+                ?? cal.startOfDay(for: date)
+            _entryDate = State(initialValue: cal.startOfDay(for: date))
+            _startTime = State(initialValue: start)
+            _endTime = State(initialValue: start.addingTimeInterval(3600))  // +1h default
             _selectedProject = State(initialValue: nil)
         }
     }
 
+    /// Other segments on the same day (the one being edited is excluded).
+    private var sameDayConflicts: [WorkSegment] {
+        let editingID = segment?.persistentModelID
+        return allSegments.filter {
+            $0.persistentModelID != editingID && $0.date.isSameDay(as: entryDate)
+        }
+    }
+
+    /// First blocking problem with the current input, or nil when it's valid.
+    private var validationError: String? {
+        guard endTime > startTime else { return tr("End time must be after start time.") }
+        guard startTime.isSameDay(as: endTime) else {
+            return tr("An entry can’t cross midnight — split it into two entries.")
+        }
+        if let clash = sameDayConflicts.first(where: { startTime < $0.endTime && endTime > $0.startTime }) {
+            return tr("Overlaps with %@–%@.", TimeField.format(clash.startTime), TimeField.format(clash.endTime))
+        }
+        return nil
+    }
+
     var body: some View {
         VStack(spacing: 16) {
-            Text(isEditing ? "Edit Time Entry" : "New Time Entry")
+            Text(isEditing ? tr("Edit Time Entry") : tr("New Time Entry"))
                 .font(.headline)
 
-            Text(date, format: .dateTime.weekday(.wide).day().month(.wide).year())
-                .foregroundStyle(.secondary)
-
             Form {
-                DatePicker("Start", selection: $startTime, displayedComponents: .hourAndMinute)
-                DatePicker("End", selection: $endTime, displayedComponents: .hourAndMinute)
+                DatePicker(tr("Date"), selection: $entryDate, displayedComponents: .date)
+                    .onChange(of: entryDate) { _, newDay in
+                        startTime = reanchor(startTime, to: newDay)
+                        endTime = reanchor(endTime, to: newDay)
+                    }
+
+                LabeledContent(tr("Start")) {
+                    TimeField(time: $startTime, date: entryDate, autoFocus: true)
+                        .frame(width: 72)
+                }
+                LabeledContent(tr("End")) {
+                    TimeField(time: $endTime, date: entryDate)
+                        .frame(width: 72)
+                }
 
                 HStack {
-                    Text("Project")
+                    Text(tr("Project"))
                     Spacer()
-                    ComboBoxPicker(projects: projects, selection: $selectedProject)
+                    ComboBoxPicker(projects: projects, selection: $selectedProject,
+                                   onCreate: { createProject(named: $0) })
                         .frame(width: 180)
                 }
 
-                if startTime < endTime {
+                if let error = validationError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                } else {
                     let hours = endTime.timeIntervalSince(startTime) / 3600
                     HStack {
-                        Text("Duration")
+                        Text(tr("Duration"))
                         Spacer()
-                        Text(formatHours(hours))
+                        Text(TimeFormatting.hours(hours))
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
@@ -67,26 +106,51 @@ struct SegmentEditSheet: View {
             .formStyle(.grouped)
 
             HStack {
-                Button("Cancel") { dismiss() }
+                Button(tr("Cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button(isEditing ? "Save" : "Add") { save() }
+                Button(isEditing ? tr("Save") : tr("Add")) { save() }
                     .keyboardShortcut(.defaultAction)
+                    .disabled(validationError != nil)
             }
+
+            // Save from anywhere in the sheet (⌘↩), even while a text field or the
+            // project picker has focus. Hidden — the visible button handles plain Return.
+            Button("") { save() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(validationError != nil)
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                .accessibilityHidden(true)
         }
         .padding()
-        .frame(width: 360)
+        .frame(width: 380)
         .onAppear {
             // Default to "Other" project if none selected
             if selectedProject == nil {
                 selectedProject = getOrCreateOtherProject()
             }
         }
-        .alert("Invalid Entry", isPresented: $showValidationError) {
-            Button("OK") {}
-        } message: {
-            Text(validationMessage)
+    }
+
+    // MARK: - Helpers
+
+    /// Move a time onto `day`, preserving its hour and minute.
+    private func reanchor(_ time: Date, to day: Date) -> Date {
+        let comps = Calendar.zurich.dateComponents([.hour, .minute], from: time)
+        return Calendar.zurich.date(bySettingHour: comps.hour ?? 0, minute: comps.minute ?? 0,
+                                    second: 0, of: day) ?? time
+    }
+
+    private func createProject(named name: String) -> Project {
+        if let existing = projects.first(where: {
+            $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame
+        }) {
+            return existing
         }
+        let project = Project(name: name)
+        modelContext.insert(project)
+        return project
     }
 
     private func getOrCreateOtherProject() -> Project {
@@ -99,30 +163,21 @@ struct SegmentEditSheet: View {
     }
 
     private func save() {
+        guard validationError == nil else { return }
         let project = selectedProject ?? getOrCreateOtherProject()
 
-        guard endTime > startTime else {
-            validationMessage = "End time must be after start time."
-            showValidationError = true
-            return
-        }
-
-        if let segment = segment {
+        if let segment {
+            segment.date = entryDate.startOfDayZurich
             segment.startTime = startTime
             segment.endTime = endTime
             segment.project = project
             segment.recalculateDuration()
         } else {
-            let newSegment = WorkSegment(date: date, startTime: startTime, endTime: endTime, project: project)
+            let newSegment = WorkSegment(date: entryDate, startTime: startTime,
+                                         endTime: endTime, project: project)
             modelContext.insert(newSegment)
         }
 
         dismiss()
-    }
-
-    private func formatHours(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int(((hours - Double(h)) * 60).rounded())
-        return String(format: "%dh %02dm", h, m)
     }
 }
