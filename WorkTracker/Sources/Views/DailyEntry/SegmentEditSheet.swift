@@ -65,12 +65,6 @@ struct SegmentEditSheet: View {
                 .font(.headline)
 
             Form {
-                DatePicker(tr("Date"), selection: $entryDate, displayedComponents: .date)
-                    .onChange(of: entryDate) { _, newDay in
-                        startTime = reanchor(startTime, to: newDay)
-                        endTime = reanchor(endTime, to: newDay)
-                    }
-
                 LabeledContent(tr("Start")) {
                     TimeField(time: $startTime, date: entryDate, autoFocus: true)
                         .frame(width: 72)
@@ -87,6 +81,14 @@ struct SegmentEditSheet: View {
                                    onCreate: { createProject(named: $0) })
                         .frame(width: 180)
                 }
+
+                // Date lives below the entry fields so it doesn't interrupt the
+                // Start → End → Project flow (it's usually already the selected day).
+                DatePicker(tr("Date"), selection: $entryDate, displayedComponents: .date)
+                    .onChange(of: entryDate) { _, newDay in
+                        startTime = reanchor(startTime, to: newDay)
+                        endTime = reanchor(endTime, to: newDay)
+                    }
 
                 if let error = validationError {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
