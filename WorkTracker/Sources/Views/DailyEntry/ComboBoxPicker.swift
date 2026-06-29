@@ -4,6 +4,9 @@ import AppKit
 struct ComboBoxPicker: NSViewRepresentable {
     let projects: [Project]
     @Binding var selection: Project?
+    /// Create (or fetch an existing) project for a typed name that doesn't match the
+    /// list. Lets the user add a project without leaving the entry sheet.
+    var onCreate: ((String) -> Project)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -19,7 +22,7 @@ struct ComboBoxPicker: NSViewRepresentable {
         comboBox.delegate = context.coordinator
         comboBox.target = context.coordinator
         comboBox.action = #selector(Coordinator.comboBoxAction(_:))
-        comboBox.placeholderString = "Type to search..."
+        comboBox.placeholderString = tr("Type to search…")
         comboBox.font = .systemFont(ofSize: NSFont.systemFontSize)
         comboBox.controlSize = .regular
         return comboBox
@@ -70,10 +73,17 @@ struct ComboBoxPicker: NSViewRepresentable {
 
         private func selectProject(from text: String) {
             guard !updating else { return }
-            if let match = parent.projects.first(where: { $0.name.localizedCaseInsensitiveCompare(text) == .orderedSame }) {
+            let trimmed = text.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return }
+
+            // Exact (case-insensitive) match wins. Otherwise create a new project for
+            // the typed name instead of silently snapping to a fuzzy "contains" match.
+            if let match = parent.projects.first(where: {
+                $0.name.localizedCaseInsensitiveCompare(trimmed) == .orderedSame
+            }) {
                 parent.selection = match
-            } else if let match = parent.projects.first(where: { $0.name.localizedCaseInsensitiveContains(text) }) {
-                parent.selection = match
+            } else if let created = parent.onCreate?(trimmed) {
+                parent.selection = created
             }
         }
     }

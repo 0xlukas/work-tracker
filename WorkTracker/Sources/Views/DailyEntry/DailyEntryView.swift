@@ -10,6 +10,7 @@ struct DailyEntryView: View {
     @State private var selectedDate = Date()
     @State private var showAddSheet = false
     @State private var editingSegment: WorkSegment?
+    @State private var segmentPendingDelete: WorkSegment?
 
     private var segmentsForDate: [WorkSegment] {
         let dayStart = selectedDate.startOfDayZurich
@@ -19,6 +20,16 @@ struct DailyEntryView: View {
 
     private var dailyTotal: Double {
         segmentsForDate.reduce(0) { $0 + $1.durationHours }
+    }
+
+    /// Start time to pre-fill a new entry with: the end of the day's last segment,
+    /// or 08:10 when the day has none.
+    private var defaultStartForNewEntry: Date {
+        if let lastEnd = segmentsForDate.map(\.endTime).max() {
+            return lastEnd
+        }
+        return Calendar.zurich.date(bySettingHour: 8, minute: 10, second: 0, of: selectedDate)
+            ?? selectedDate
     }
 
     private let calculator = WorkHoursCalculator()
@@ -35,13 +46,21 @@ struct DailyEntryView: View {
         calculator.classify(date: selectedDate, absenceLookup: absenceLookup)
     }
 
-    /// The current week (Mon-Fri) containing the selected date
+    /// The current week containing the selected date: Mon–Fri always, plus Sat/Sun
+    /// only when work is logged on them (so weekend hours aren't silently hidden).
     private var currentWeekDays: [Date] {
         let cal = Calendar.zurich
         let weekday = cal.component(.weekday, from: selectedDate) // 1=Sun, 2=Mon, ..., 7=Sat
         let daysFromMonday = (weekday + 5) % 7 // Mon=0, Tue=1, ..., Sun=6
         guard let monday = cal.date(byAdding: .day, value: -daysFromMonday, to: selectedDate) else { return [] }
-        return (0..<5).compactMap { cal.date(byAdding: .day, value: $0, to: monday) }
+        return (0..<7).compactMap { offset in
+            guard let day = cal.date(byAdding: .day, value: offset, to: monday) else { return nil }
+            if offset >= 5 { // Saturday/Sunday — show only if there's work that day
+                let hasWork = allSegments.contains { $0.date.isSameDay(as: day) }
+                return hasWork ? day : nil
+            }
+            return day
+        }
     }
 
     var body: some View {
@@ -61,7 +80,7 @@ struct DailyEntryView: View {
 
                 // Week at a glance
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("This Week")
+                    Text(tr("This Week"))
                         .font(.caption.bold())
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)
@@ -84,7 +103,7 @@ struct DailyEntryView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "flag.fill")
                                 .foregroundStyle(.orange)
-                            Text(daySummary.isHalfDayHoliday ? "\(name) (half day)" : name)
+                            Text(daySummary.isHalfDayHoliday ? tr("%@ (half day)", name) : name)
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -95,7 +114,7 @@ struct DailyEntryView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "thermometer.medium")
                                 .foregroundStyle(.red)
-                            Text(daySummary.isHalfDaySick ? "Sick (half day)" : "Sick day")
+                            Text(daySummary.isHalfDaySick ? tr("Sick (half day)") : tr("Sick day"))
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -106,7 +125,7 @@ struct DailyEntryView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "airplane")
                                 .foregroundStyle(.blue)
-                            Text(daySummary.isHalfDayVacation ? "Vacation (half day)" : "Vacation")
+                            Text(daySummary.isHalfDayVacation ? tr("Vacation (half day)") : tr("Vacation"))
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -117,7 +136,7 @@ struct DailyEntryView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "moon.fill")
                                 .foregroundStyle(.purple)
-                            Text("Weekend")
+                            Text(tr("Weekend"))
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -140,29 +159,41 @@ struct DailyEntryView: View {
                             .font(.title2.bold())
 
                         HStack(spacing: 12) {
-                            Label(formatHours(dailyTotal), systemImage: "clock")
+                            Label(TimeFormatting.hours(dailyTotal), systemImage: "clock")
                                 .font(.subheadline)
                                 .foregroundStyle(.primary)
 
                             if daySummary.expectedHours > 0 {
-                                Text("of \(formatHours(daySummary.expectedHours)) expected")
+                                Text(tr("of %@ expected", TimeFormatting.hours(daySummary.expectedHours)))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
+
+                                if dailyTotal > daySummary.expectedHours {
+                                    Text(tr("· +%@ over", TimeFormatting.hours(dailyTotal - daySummary.expectedHours)))
+                                        .font(.subheadline)
+                                        .foregroundStyle(.green)
+                                }
                             }
                         }
                     }
 
                     Spacer()
 
+                    Button(tr("Today")) { selectedDate = Date() }
+                        .controlSize(.regular)
+                        .disabled(selectedDate.isSameDay(as: Date()))
+                        .help(tr("Jump to today (⌘T)"))
+                        .keyboardShortcut("t", modifiers: .command)
+
                     Button {
                         showAddSheet = true
                     } label: {
-                        Label("Add Entry", systemImage: "plus")
+                        Label(tr("Add Entry"), systemImage: "plus")
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.regular)
                     .keyboardShortcut("n", modifiers: .command)
-                    .help("Add a time entry (⌘N)")
+                    .help(tr("Add a time entry (⌘N)"))
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
@@ -195,10 +226,10 @@ struct DailyEntryView: View {
                         Image(systemName: "clock")
                             .font(.system(size: 36))
                             .foregroundStyle(.quaternary)
-                        Text("No time entries yet")
+                        Text(tr("No time entries yet"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text("Click \"Add Entry\" to log your work")
+                        Text(tr("Click \"Add Entry\" or press ⌘N to log your work"))
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
@@ -211,7 +242,7 @@ struct DailyEntryView: View {
                                 SegmentRowView(segment: segment) {
                                     editingSegment = segment
                                 } onDelete: {
-                                    modelContext.delete(segment)
+                                    segmentPendingDelete = segment
                                 }
                             }
                         }
@@ -221,12 +252,31 @@ struct DailyEntryView: View {
                 }
             }
         }
-        .navigationTitle("Daily Entry")
+        .navigationTitle(tr("Daily Entry"))
         .sheet(isPresented: $showAddSheet) {
-            SegmentEditSheet(date: selectedDate, segment: nil)
+            SegmentEditSheet(date: selectedDate, segment: nil, suggestedStart: defaultStartForNewEntry)
         }
         .sheet(item: $editingSegment) { segment in
             SegmentEditSheet(date: selectedDate, segment: segment)
+        }
+        .confirmationDialog(
+            tr("Delete this entry?"),
+            isPresented: Binding(
+                get: { segmentPendingDelete != nil },
+                set: { if !$0 { segmentPendingDelete = nil } }
+            ),
+            presenting: segmentPendingDelete
+        ) { segment in
+            Button(tr("Delete"), role: .destructive) {
+                modelContext.delete(segment)
+                segmentPendingDelete = nil
+            }
+            Button(tr("Cancel"), role: .cancel) { segmentPendingDelete = nil }
+        } message: { segment in
+            Text(tr("%@–%@ · %@ will be removed. This can’t be undone.",
+                    TimeField.format(segment.startTime),
+                    TimeField.format(segment.endTime),
+                    TimeFormatting.hours(segment.durationHours)))
         }
     }
 
@@ -268,7 +318,7 @@ struct DailyEntryView: View {
                 }
                 .frame(height: 3)
 
-                Text(dayHours > 0 ? formatHoursCompact(dayHours) : "–")
+                Text(dayHours > 0 ? TimeFormatting.hoursCompact(dayHours) : "–")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(dayHours > 0 ? .primary : .quaternary)
                     .frame(width: 36, alignment: .trailing)
@@ -284,18 +334,4 @@ struct DailyEntryView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Helpers
-
-    private func formatHours(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int(((hours - Double(h)) * 60).rounded())
-        return String(format: "%dh %02dm", h, m)
-    }
-
-    private func formatHoursCompact(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int(((hours - Double(h)) * 60).rounded())
-        if m == 0 { return "\(h)h" }
-        return String(format: "%d:%02d", h, m)
-    }
 }

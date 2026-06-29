@@ -7,14 +7,14 @@ struct MonthlyBreakdownView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("Month")
+                Text(tr("Month"))
                     .frame(width: 100, alignment: .leading)
                 Spacer()
-                Text("Expected")
+                Text(tr("Expected"))
                     .frame(width: 72, alignment: .trailing)
-                Text("Worked")
+                Text(tr("Worked"))
                     .frame(width: 72, alignment: .trailing)
-                Text("Balance")
+                Text(tr("Balance"))
                     .frame(width: 80, alignment: .trailing)
             }
             .font(.caption.bold())
@@ -41,14 +41,14 @@ struct MonthlyBreakdownView: View {
                     }
                     .frame(height: 4)
 
-                    Text(formatHours(month.expectedHours))
+                    Text(TimeFormatting.hours(month.expectedHours))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                         .frame(width: 72, alignment: .trailing)
-                    Text(formatHours(month.actualHours))
+                    Text(TimeFormatting.hours(month.actualHours))
                         .monospacedDigit()
                         .frame(width: 72, alignment: .trailing)
-                    Text("\(month.balance >= 0 ? "+" : "")\(formatHours(abs(month.balance)))")
+                    Text("\(month.balance >= 0 ? "+" : "")\(TimeFormatting.hours(abs(month.balance)))")
                         .monospacedDigit()
                         .foregroundColor(balanceColor(month))
                         .frame(width: 80, alignment: .trailing)
@@ -77,9 +77,4 @@ struct MonthlyBreakdownView: View {
         return month.balance >= 0 ? .green : .red
     }
 
-    private func formatHours(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int(((hours - Double(h)) * 60).rounded())
-        return String(format: "%dh %02dm", h, m)
-    }
 }

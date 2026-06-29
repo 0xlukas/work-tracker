@@ -14,13 +14,14 @@ struct DailyQuoteOverlayView: View {
 
                 // Red star accent
                 Image(systemName: "star.fill")
-                    .font(.system(size: 28))
+                    .font(.largeTitle)
                     .foregroundStyle(.red.opacity(0.7))
                     .padding(.bottom, 32)
+                    .accessibilityHidden(true)
 
                 // Quote
                 Text("\u{201C}\(quote.text)\u{201D}")
-                    .font(.system(size: 22, weight: .light, design: .serif))
+                    .font(.system(.title, design: .serif).weight(.light))
                     .italic()
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -30,13 +31,13 @@ struct DailyQuoteOverlayView: View {
                 // Attribution
                 VStack(spacing: 4) {
                     Text("— \(quote.thinker)")
-                        .font(.system(size: 16, weight: .medium, design: .serif))
+                        .font(.system(.headline, design: .serif))
                         .foregroundStyle(.white.opacity(0.85))
 
                     if let source = quote.source {
                         Text(source)
-                            .font(.system(size: 13, weight: .regular, design: .serif))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .font(.system(.subheadline, design: .serif))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
                 }
                 .padding(.top, 24)
@@ -44,14 +45,32 @@ struct DailyQuoteOverlayView: View {
                 Spacer()
 
                 // Dismiss hint
-                Text("Press any key to start your day")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.3))
+                Text(tr("Press any key, or click anywhere, to start your day"))
+                    .font(.callout)
+                    .foregroundStyle(.white.opacity(0.6))
                     .padding(.bottom, 28)
             }
             .padding(48)
 
-            // Invisible key/mouse capture
+            // Visible, accessible close affordance (Escape and any-key also dismiss).
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)   // Escape
+                    .help(tr("Dismiss (Esc)"))
+                    .accessibilityLabel(tr("Dismiss quote"))
+                    .padding(20)
+                }
+                Spacer()
+            }
+
+            // Invisible key/mouse capture (any key or click dismisses)
             KeyCaptureRepresentable(onEvent: onDismiss)
                 .frame(width: 0, height: 0)
         }
