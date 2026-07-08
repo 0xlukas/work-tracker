@@ -32,6 +32,7 @@
 "End time must be after start time." = "End time must be after start time.";
 "An entry can’t cross midnight — split it into two entries." = "An entry can’t cross midnight — split it into two entries.";
 "Overlaps with %@–%@." = "Overlaps with %@–%@.";
+"Select a project." = "Select a project.";
 "Type to search…" = "Type to search…";
 "%lld project" = "%lld project";
 "%lld projects" = "%lld projects";

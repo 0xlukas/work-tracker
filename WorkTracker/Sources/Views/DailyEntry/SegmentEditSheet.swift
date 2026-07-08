@@ -56,6 +56,7 @@ struct SegmentEditSheet: View {
         if let clash = sameDayConflicts.first(where: { startTime < $0.endTime && endTime > $0.startTime }) {
             return tr("Overlaps with %@–%@.", TimeField.format(clash.startTime), TimeField.format(clash.endTime))
         }
+        guard selectedProject != nil else { return tr("Select a project.") }
         return nil
     }
 
@@ -77,8 +78,7 @@ struct SegmentEditSheet: View {
                 HStack {
                     Text(tr("Project"))
                     Spacer()
-                    ComboBoxPicker(projects: projects, selection: $selectedProject,
-                                   onCreate: { createProject(named: $0) })
+                    ComboBoxPicker(projects: projects, selection: $selectedProject)
                         .frame(width: 180)
                 }
 
@@ -128,9 +128,9 @@ struct SegmentEditSheet: View {
         .padding()
         .frame(width: 380)
         .onAppear {
-            // Default to "Other" project if none selected
+            // Default to the "Other" project if none selected
             if selectedProject == nil {
-                selectedProject = getOrCreateOtherProject()
+                selectedProject = otherProject
             }
         }
     }
@@ -144,29 +144,14 @@ struct SegmentEditSheet: View {
                                     second: 0, of: day) ?? time
     }
 
-    private func createProject(named name: String) -> Project {
-        if let existing = projects.first(where: {
-            $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame
-        }) {
-            return existing
-        }
-        let project = Project(name: name)
-        modelContext.insert(project)
-        return project
-    }
-
-    private func getOrCreateOtherProject() -> Project {
-        if let existing = projects.first(where: { $0.name == "Other" }) {
-            return existing
-        }
-        let other = Project(name: "Other")
-        modelContext.insert(other)
-        return other
+    /// The fallback "Other" project, if it exists. The entry sheet is selection-only —
+    /// projects are created in the Projects screen.
+    private var otherProject: Project? {
+        projects.first { $0.name.localizedCaseInsensitiveCompare("Other") == .orderedSame }
     }
 
     private func save() {
-        guard validationError == nil else { return }
-        let project = selectedProject ?? getOrCreateOtherProject()
+        guard validationError == nil, let project = selectedProject else { return }
 
         if let segment {
             segment.date = entryDate.startOfDayZurich

@@ -1,12 +1,12 @@
 import SwiftUI
 import AppKit
 
+/// Editable combo box for picking an existing project. Autocomplete and matching are
+/// case-insensitive; typed text that matches no project reverts to the current
+/// selection — projects can only be created in the Projects screen.
 struct ComboBoxPicker: NSViewRepresentable {
     let projects: [Project]
     @Binding var selection: Project?
-    /// Create (or fetch an existing) project for a typed name that doesn't match the
-    /// list. Lets the user add a project without leaving the entry sheet.
-    var onCreate: ((String) -> Project)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -14,7 +14,10 @@ struct ComboBoxPicker: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSComboBox {
         let comboBox = NSComboBox()
-        comboBox.usesDataSource = false
+        // Data-source mode so the coordinator controls completion — the default
+        // item-list completion is a case-sensitive prefix match.
+        comboBox.usesDataSource = true
+        comboBox.dataSource = context.coordinator
         comboBox.completes = true  // Auto-complete as you type
         comboBox.isEditable = true
         comboBox.hasVerticalScroller = true
@@ -32,8 +35,7 @@ struct ComboBoxPicker: NSViewRepresentable {
         context.coordinator.parent = self
         context.coordinator.updating = true
 
-        comboBox.removeAllItems()
-        comboBox.addItems(withObjectValues: projects.map { $0.name })
+        comboBox.reloadData()
 
         if let selected = selection {
             if comboBox.stringValue != selected.name {
@@ -46,7 +48,7 @@ struct ComboBoxPicker: NSViewRepresentable {
         context.coordinator.updating = false
     }
 
-    class Coordinator: NSObject, NSComboBoxDelegate {
+    class Coordinator: NSObject, NSComboBoxDelegate, NSComboBoxDataSource {
         var parent: ComboBoxPicker
         var updating = false
 
@@ -54,8 +56,34 @@ struct ComboBoxPicker: NSViewRepresentable {
             self.parent = parent
         }
 
+        // MARK: NSComboBoxDataSource
+
+        func numberOfItems(in comboBox: NSComboBox) -> Int {
+            parent.projects.count
+        }
+
+        func comboBox(_ comboBox: NSComboBox, objectValueForItemAt index: Int) -> Any? {
+            guard index >= 0 && index < parent.projects.count else { return nil }
+            return parent.projects[index].name
+        }
+
+        func comboBox(_ comboBox: NSComboBox, completedString string: String) -> String? {
+            parent.projects.first {
+                $0.name.range(of: string,
+                              options: [.caseInsensitive, .diacriticInsensitive, .anchored]) != nil
+            }?.name
+        }
+
+        func comboBox(_ comboBox: NSComboBox, indexOfItemWithStringValue string: String) -> Int {
+            parent.projects.firstIndex {
+                $0.name.localizedCaseInsensitiveCompare(string) == .orderedSame
+            } ?? NSNotFound
+        }
+
+        // MARK: NSComboBoxDelegate
+
         @objc func comboBoxAction(_ sender: NSComboBox) {
-            selectProject(from: sender.stringValue)
+            selectProject(in: sender)
         }
 
         func comboBoxSelectionDidChange(_ notification: Notification) {
@@ -68,22 +96,23 @@ struct ComboBoxPicker: NSViewRepresentable {
 
         func controlTextDidEndEditing(_ obj: Notification) {
             guard let comboBox = obj.object as? NSComboBox else { return }
-            selectProject(from: comboBox.stringValue)
+            selectProject(in: comboBox)
         }
 
-        private func selectProject(from text: String) {
+        private func selectProject(in comboBox: NSComboBox) {
             guard !updating else { return }
-            let trimmed = text.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty else { return }
+            let trimmed = comboBox.stringValue.trimmingCharacters(in: .whitespaces)
 
-            // Exact (case-insensitive) match wins. Otherwise create a new project for
-            // the typed name instead of silently snapping to a fuzzy "contains" match.
+            // Exact (case-insensitive) match wins; anything else keeps the current
+            // selection and the field snaps back to its name.
             if let match = parent.projects.first(where: {
                 $0.name.localizedCaseInsensitiveCompare(trimmed) == .orderedSame
             }) {
                 parent.selection = match
-            } else if let created = parent.onCreate?(trimmed) {
-                parent.selection = created
+            }
+            let selectedName = parent.selection?.name ?? ""
+            if comboBox.stringValue != selectedName {
+                comboBox.stringValue = selectedName
             }
         }
     }

@@ -38,6 +38,7 @@
 "End time must be after start time." = "Die Endzeit muss nach der Startzeit liegen.";
 "An entry can’t cross midnight — split it into two entries." = "Ein Eintrag darf nicht über Mitternacht gehen — teilen Sie ihn in zwei Einträge auf.";
 "Overlaps with %@–%@." = "Überschneidet sich mit %@–%@.";
+"Select a project." = "Bitte wählen Sie ein Projekt aus.";
 "Type to search…" = "Zum Suchen tippen …";
 
 /* Projects */
