@@ -32,6 +32,7 @@ struct VacationAllowance: Equatable {
 
 /// User preferences, stored in `UserDefaults` and observable, so every screen and the
 /// Settings window update the moment a value changes.
+@MainActor
 @Observable
 final class Preferences {
     static let shared = Preferences()

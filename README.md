@@ -10,7 +10,7 @@ scripts/build-app.sh            # release WorkTracker.app in .build/app
 BUNDLE_ID=com.worktracker.app.test scripts/build-app.sh /tmp/test   # separate settings domain for testing
 ```
 
-The script copies the compiled String Catalog into `Contents/Resources/<lang>.lproj` and sets `LSMinimumSystemVersion` to 27.0.
+The script copies the compiled String Catalog into `Contents/Resources/<lang>.lproj`, compiles the Liquid Glass app icon (`Resources/AppIcon.icon`, editable in Icon Composer; light, dark and tinted variants) with `actool`, and sets `LSMinimumSystemVersion` to 27.0.
 
 ## Features
 

@@ -49,7 +49,8 @@ struct TimeField: NSViewRepresentable {
 
     // MARK: - Coordinator
 
-    class Coordinator: NSObject, NSTextFieldDelegate {
+    @MainActor
+    final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: TimeField
         var wantsInitialFocus = false
 
@@ -97,20 +98,20 @@ struct TimeField: NSViewRepresentable {
 
     // MARK: - Parsing & formatting
 
-    static func format(_ time: Date) -> String {
+    nonisolated static func format(_ time: Date) -> String {
         let comps = Calendar.zurich.dateComponents([.hour, .minute], from: time)
         return String(format: "%02d:%02d", comps.hour ?? 0, comps.minute ?? 0)
     }
 
     /// Like `format(_:)`, but midnight at the end of `day` reads `24:00`.
-    static func format(_ time: Date, on day: Date) -> String {
+    nonisolated static func format(_ time: Date, on day: Date) -> String {
         time == day.startOfDayZurich.addingDays(1) ? "24:00" : format(time)
     }
 
     /// Parse compact (`0930`, `930`, `9`) or separated (`9:30`) input into a `Date`
     /// on `day`. Returns nil for anything that isn't a valid 24h time. With
     /// `allowsEndOfDay`, `24`/`24:00`/`2400` mean midnight at the end of `day`.
-    static func parse(_ input: String, on day: Date, allowsEndOfDay: Bool = false) -> Date? {
+    nonisolated static func parse(_ input: String, on day: Date, allowsEndOfDay: Bool = false) -> Date? {
         let trimmed = input.trimmingCharacters(in: .whitespaces)
         let hour: Int
         let minute: Int

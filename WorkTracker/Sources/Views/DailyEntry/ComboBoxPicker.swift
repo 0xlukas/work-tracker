@@ -48,7 +48,8 @@ struct ComboBoxPicker: NSViewRepresentable {
         context.coordinator.updating = false
     }
 
-    class Coordinator: NSObject, NSComboBoxDelegate, NSComboBoxDataSource {
+    @MainActor
+    final class Coordinator: NSObject, NSComboBoxDelegate, NSComboBoxDataSource {
         var parent: ComboBoxPicker
         var updating = false
 
