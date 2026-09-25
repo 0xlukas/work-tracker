@@ -16,6 +16,8 @@ struct TimeField: NSViewRepresentable {
     let date: Date
     /// Grab keyboard focus when the field first appears (used for the Start field).
     var autoFocus: Bool = false
+    /// Accept `24:00` (midnight at the end of `date`) — used for the End field.
+    var allowsEndOfDay: Bool = false
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -25,7 +27,7 @@ struct TimeField: NSViewRepresentable {
         field.alignment = .center
         field.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
         field.controlSize = .regular
-        field.stringValue = Self.format(time)
+        field.stringValue = Self.format(time, on: date)
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         if autoFocus { context.coordinator.wantsInitialFocus = true }
         return field
@@ -36,7 +38,7 @@ struct TimeField: NSViewRepresentable {
         // Don't clobber what the user is typing; only refresh the display when the
         // field isn't being edited (e.g. an externally auto-filled default).
         if field.currentEditor() == nil {
-            let formatted = Self.format(time)
+            let formatted = Self.format(time, on: date)
             if field.stringValue != formatted { field.stringValue = formatted }
         }
         if context.coordinator.wantsInitialFocus, let window = field.window {
@@ -71,25 +73,25 @@ struct TimeField: NSViewRepresentable {
         /// Parse and write back to the binding; revert + beep on invalid input.
         func commit(_ field: NSTextField?) {
             guard let field else { return }
-            if let parsed = TimeField.parse(field.stringValue, on: parent.date) {
+            if let parsed = TimeField.parse(field.stringValue, on: parent.date, allowsEndOfDay: parent.allowsEndOfDay) {
                 parent.time = parsed
-                field.stringValue = TimeField.format(parsed)
+                field.stringValue = TimeField.format(parsed, on: parent.date)
             } else {
-                field.stringValue = TimeField.format(parent.time)
+                field.stringValue = TimeField.format(parent.time, on: parent.date)
                 NSSound.beep()
             }
         }
 
         private func nudge(_ field: NSTextField, _ minutes: Int) {
-            let base = TimeField.parse(field.stringValue, on: parent.date) ?? parent.time
-            let comps = Calendar.zurich.dateComponents([.hour, .minute], from: base)
-            var total = (comps.hour ?? 0) * 60 + (comps.minute ?? 0) + minutes
-            total = ((total % 1440) + 1440) % 1440
-            if let newTime = Calendar.zurich.date(bySettingHour: total / 60, minute: total % 60,
-                                                  second: 0, of: parent.date) {
-                parent.time = newTime
-                field.stringValue = TimeField.format(newTime)
-            }
+            let day = parent.date.startOfDayZurich
+            let base = TimeField.parse(field.stringValue, on: day, allowsEndOfDay: parent.allowsEndOfDay) ?? parent.time
+            let current = Calendar.zurich.dateComponents([.minute], from: day, to: base).minute ?? 0
+            // Wrap within the day; the End field also reaches 24:00.
+            let span = parent.allowsEndOfDay ? 1441 : 1440
+            let total = (((current + minutes) % span) + span) % span
+            let newTime = Calendar.zurich.date(byAdding: .minute, value: total, to: day)!
+            parent.time = newTime
+            field.stringValue = TimeField.format(newTime, on: day)
         }
     }
 
@@ -100,9 +102,15 @@ struct TimeField: NSViewRepresentable {
         return String(format: "%02d:%02d", comps.hour ?? 0, comps.minute ?? 0)
     }
 
+    /// Like `format(_:)`, but midnight at the end of `day` reads `24:00`.
+    static func format(_ time: Date, on day: Date) -> String {
+        time == day.startOfDayZurich.addingDays(1) ? "24:00" : format(time)
+    }
+
     /// Parse compact (`0930`, `930`, `9`) or separated (`9:30`) input into a `Date`
-    /// on `day`. Returns nil for anything that isn't a valid 24h time.
-    static func parse(_ input: String, on day: Date) -> Date? {
+    /// on `day`. Returns nil for anything that isn't a valid 24h time. With
+    /// `allowsEndOfDay`, `24`/`24:00`/`2400` mean midnight at the end of `day`.
+    static func parse(_ input: String, on day: Date, allowsEndOfDay: Bool = false) -> Date? {
         let trimmed = input.trimmingCharacters(in: .whitespaces)
         let hour: Int
         let minute: Int
@@ -131,6 +139,9 @@ struct TimeField: NSViewRepresentable {
             }
         }
 
+        if allowsEndOfDay && hour == 24 && minute == 0 {
+            return day.startOfDayZurich.addingDays(1)
+        }
         guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
         return Calendar.zurich.date(bySettingHour: hour, minute: minute, second: 0, of: day)
     }

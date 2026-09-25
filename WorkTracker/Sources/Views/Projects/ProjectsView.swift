@@ -4,149 +4,53 @@ import SwiftData
 struct ProjectsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Project.name) private var projects: [Project]
-    @Query(sort: \WorkSegment.startTime) private var allSegments: [WorkSegment]
 
     @State private var newProjectName = ""
+    @State private var newProjectError: String?
     @State private var editingProject: Project?
     @State private var editName = ""
-    @State private var showDeleteError = false
-    @State private var deleteErrorMessage = ""
+    @State private var editError: String?
+    @State private var deleteErrorMessage: String?
     @State private var hoveredProject: Project?
     @State private var projectPendingDelete: Project?
+    @State private var colorPickerProject: Project?
+    @State private var showArchived = false
+    @FocusState private var newProjectFieldFocused: Bool
 
-    @State private var reportFrom: Date = Calendar.zurich.date(from: DateComponents(
-        timeZone: TimeZone(identifier: "Europe/Zurich"),
-        year: Calendar.zurich.component(.year, from: Date()),
-        month: 1, day: 1))!
-    @State private var reportTo: Date = Date()
+    @State private var reportFrom = Calendar.zurich.zurichDate(year: Date().zurichYear, month: 1, day: 1)
+    @State private var reportTo = Date().startOfDayZurich
 
-    private let calculator = WorkHoursCalculator()
+    private var activeProjects: [Project] { projects.filter { !$0.isArchived } }
+    private var archivedProjects: [Project] { projects.filter(\.isArchived) }
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left: Projects
-            VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(tr("Projects"))
-                        .font(.title2.bold())
-                    Text(tr(projects.count == 1 ? "%lld project" : "%lld projects", projects.count))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 12)
-
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(projects) { project in
-                            projectRow(project)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                }
-
-                Divider()
-                    .padding(.horizontal, 12)
-
-                // Add project
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundStyle(.blue)
-                        .font(.title3)
-                    TextField(tr("Add new project..."), text: $newProjectName)
-                        .textFieldStyle(.plain)
-                        .onSubmit { addProject() }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-            }
-            .frame(minWidth: 300, idealWidth: 320)
+            projectsPane
+                .frame(minWidth: 300, idealWidth: 320)
 
             Divider()
 
-            // Right: Time Report
-            VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(tr("Time Report"))
-                        .font(.title2.bold())
-                    Text(tr("Hours per project"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
-
-                // Date range
-                HStack(spacing: 16) {
-                    HStack(spacing: 8) {
-                        Text(tr("From"))
-                            .foregroundStyle(.secondary)
-                            .font(.subheadline)
-                        DatePicker("", selection: $reportFrom, displayedComponents: .date)
-                            .labelsHidden()
-                    }
-                    HStack(spacing: 8) {
-                        Text(tr("To"))
-                            .foregroundStyle(.secondary)
-                            .font(.subheadline)
-                        DatePicker("", selection: $reportTo, displayedComponents: .date)
-                            .labelsHidden()
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
-
-                Divider()
-                    .padding(.horizontal, 24)
-
-                let breakdown = calculator.projectBreakdown(from: reportFrom, to: reportTo, segments: allSegments)
-
-                if breakdown.isEmpty {
-                    Spacer()
-                    VStack(spacing: 8) {
-                        Image(systemName: "chart.bar")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.quaternary)
-                        Text(tr("No work logged in this period"))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    Spacer()
-                } else {
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            ForEach(breakdown) { item in
-                                reportRow(item: item, maxHours: breakdown.map(\.hours).max() ?? 1)
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.top, 12)
-
-                        let totalHours = breakdown.reduce(0) { $0 + $1.hours }
-                        HStack {
-                            Text(tr("Total"))
-                                .font(.subheadline.bold())
-                            Spacer()
-                            Text(TimeFormatting.hours(totalHours))
-                                .font(.body.bold().monospacedDigit())
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.top, 12)
-                        .padding(.bottom, 20)
-                    }
-                }
-            }
-            .frame(minWidth: 360)
+            reportPane
+                .frame(minWidth: 360)
         }
         .navigationTitle(tr("Projects"))
-        .alert(tr("Cannot Delete"), isPresented: $showDeleteError) {
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    newProjectFieldFocused = true
+                } label: {
+                    Label(tr("New Project"), systemImage: "plus")
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                .help(tr("New Project (⌘N)"))
+            }
+        }
+        .alert(tr("Cannot Delete"), isPresented: Binding(
+            get: { deleteErrorMessage != nil }, set: { if !$0 { deleteErrorMessage = nil } }
+        )) {
             Button(tr("OK")) {}
         } message: {
-            Text(deleteErrorMessage)
+            Text(deleteErrorMessage ?? "")
         }
         .confirmationDialog(
             tr("Delete this project?"),
@@ -162,7 +66,113 @@ struct ProjectsView: View {
             }
             Button(tr("Cancel"), role: .cancel) { projectPendingDelete = nil }
         } message: { project in
-            Text(tr("'%@' will be removed.", project.name))
+            Text(tr("'%@' will be removed. You can undo this with ⌘Z.", project.name))
+        }
+    }
+
+    // MARK: - Left: Projects
+
+    private var projectsPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(tr("Projects"))
+                    .font(.title3.bold())
+                Text(tr("%lld projects", activeProjects.count))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
+
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(activeProjects) { project in
+                        projectRow(project)
+                    }
+
+                    if !archivedProjects.isEmpty {
+                        DisclosureGroup(isExpanded: $showArchived) {
+                            ForEach(archivedProjects) { project in
+                                projectRow(project)
+                            }
+                        } label: {
+                            Text(tr("Archived (%lld)", archivedProjects.count))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.top, 12)
+                    }
+                }
+                .padding(.horizontal, 12)
+            }
+
+            Divider()
+                .padding(.horizontal, 12)
+
+            // Add project
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(Color.accentColor)
+                        .font(.title3)
+                    TextField(tr("Add new project..."), text: $newProjectName)
+                        .textFieldStyle(.plain)
+                        .focused($newProjectFieldFocused)
+                        .onSubmit { addProject() }
+                        .onChange(of: newProjectName) { newProjectError = nil }
+                }
+                if let newProjectError {
+                    Text(newProjectError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+    }
+
+    // MARK: - Right: Time Report
+
+    private var reportPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(tr("Time Report"))
+                    .font(.title3.bold())
+                Text(tr("Hours per project"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
+
+            HStack(spacing: 16) {
+                HStack(spacing: 8) {
+                    Text(tr("From"))
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                    DatePicker("", selection: $reportFrom, displayedComponents: .date)
+                        .labelsHidden()
+                }
+                HStack(spacing: 8) {
+                    Text(tr("To"))
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                    DatePicker("", selection: $reportTo, displayedComponents: .date)
+                        .labelsHidden()
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 16)
+
+            Divider()
+                .padding(.horizontal, 24)
+
+            ProjectReport(from: reportFrom, to: reportTo)
         }
     }
 
@@ -170,52 +180,81 @@ struct ProjectsView: View {
 
     @ViewBuilder
     private func projectRow(_ project: Project) -> some View {
-        if editingProject?.id == project.id {
-            HStack(spacing: 8) {
-                TextField(tr("Project name"), text: $editName)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { saveEdit(project) }
-                Button(tr("Save")) { saveEdit(project) }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                Button(tr("Cancel")) { editingProject = nil }
-                    .controlSize(.small)
+        if editingProject === project {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    TextField(tr("Project name"), text: $editName)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { saveEdit(project) }
+                        .onChange(of: editName) { editError = nil }
+                    Button(tr("Save")) { saveEdit(project) }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    Button(tr("Cancel")) { editingProject = nil }
+                        .controlSize(.small)
+                }
+                if let editError {
+                    Text(editError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
         } else {
+            let isHovered = hoveredProject === project
             HStack(spacing: 12) {
-                Circle()
-                    .fill(projectColor(project).opacity(0.15))
-                    .frame(width: 32, height: 32)
-                    .overlay {
-                        Text(String(project.name.prefix(1)).uppercased())
-                            .font(.subheadline.bold())
-                            .foregroundStyle(projectColor(project))
-                    }
+                Button {
+                    colorPickerProject = project
+                } label: {
+                    Circle()
+                        .fill(project.color.color.opacity(project.isArchived ? 0.08 : 0.15))
+                        .frame(width: 32, height: 32)
+                        .overlay {
+                            Text(String(project.name.prefix(1)).uppercased())
+                                .font(.subheadline.bold())
+                                .foregroundStyle(project.color.color)
+                        }
+                }
+                .buttonStyle(.plain)
+                .help(tr("Change colour"))
+                .accessibilityLabel(tr("Change colour of %@", project.name))
+                .popover(isPresented: Binding(
+                    get: { colorPickerProject === project },
+                    set: { if !$0 { colorPickerProject = nil } }
+                )) {
+                    ColorSwatchPicker(selection: Binding(get: { project.color }, set: { project.color = $0 }))
+                        .padding(12)
+                }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(project.name)
                         .font(.body)
-                    Text(tr(project.segments.count == 1 ? "%lld entry" : "%lld entries", project.segments.count))
+                        .foregroundStyle(project.isArchived ? .secondary : .primary)
+                    Text(tr("%lld entries", project.segments.count))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                if hoveredProject?.id == project.id {
+                if isHovered {
                     HStack(spacing: 4) {
-                        Button {
-                            editingProject = project
-                            editName = project.name
-                        } label: {
+                        Button { startEditing(project) } label: {
                             Image(systemName: "pencil")
                                 .font(.caption)
                         }
                         .buttonStyle(.borderless)
                         .help(tr("Rename project"))
                         .accessibilityLabel(tr("Rename project"))
+
+                        Button { project.isArchived.toggle() } label: {
+                            Image(systemName: project.isArchived ? "tray.and.arrow.up" : "archivebox")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .help(project.isArchived ? tr("Restore project") : tr("Archive project"))
+                        .accessibilityLabel(project.isArchived ? tr("Restore project") : tr("Archive project"))
 
                         Button { requestDelete(project) } label: {
                             Image(systemName: "trash")
@@ -229,27 +268,25 @@ struct ProjectsView: View {
                     .transition(.opacity)
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(hoveredProject?.id == project.id ? Color.primary.opacity(0.05) : Color.clear)
-            )
+            .rowHighlight(isHovered)
             .contentShape(Rectangle())
-            .onHover { isHovered in
+            .onHover { hovering in
                 withAnimation(.easeInOut(duration: 0.15)) {
-                    hoveredProject = isHovered ? project : nil
+                    hoveredProject = hovering ? project : nil
                 }
             }
-            .onTapGesture(count: 2) {
-                editingProject = project
-                editName = project.name
-            }
+            .onTapGesture(count: 2) { startEditing(project) }
             .contextMenu {
-                Button {
-                    editingProject = project
-                    editName = project.name
-                } label: { Label(tr("Rename"), systemImage: "pencil") }
+                Button { startEditing(project) } label: { Label(tr("Rename"), systemImage: "pencil") }
+                Button { colorPickerProject = project } label: { Label(tr("Change Colour…"), systemImage: "paintpalette") }
+                Button { project.isArchived.toggle() } label: {
+                    project.isArchived
+                        ? Label(tr("Restore"), systemImage: "tray.and.arrow.up")
+                        : Label(tr("Archive"), systemImage: "archivebox")
+                }
+                Divider()
                 Button(role: .destructive) { requestDelete(project) } label: {
                     Label(tr("Delete"), systemImage: "trash")
                 }
@@ -257,52 +294,35 @@ struct ProjectsView: View {
         }
     }
 
-    private func projectColor(_ project: Project) -> Color {
-        let palette: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo, .red, .mint, .cyan]
-        let sum = project.name.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        return palette[sum % palette.count]
-    }
-
-    // MARK: - Report Row
-
-    private func reportRow(item: ProjectHours, maxHours: Double) -> some View {
-        VStack(spacing: 6) {
-            HStack {
-                Text(item.project.name)
-                    .font(.subheadline)
-                Spacer()
-                Text(TimeFormatting.hours(item.hours))
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-
-            GeometryReader { geo in
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(projectColor(item.project).opacity(0.2))
-                    .frame(height: 6)
-                    .overlay(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(projectColor(item.project))
-                            .frame(width: geo.size.width * (item.hours / maxHours))
-                    }
-            }
-            .frame(height: 6)
-        }
-        .padding(.vertical, 8)
-    }
-
     // MARK: - Actions
 
     private func addProject() {
         let name = newProjectName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        modelContext.insert(Project(name: name))
+        guard !Project.isDuplicate(name: name, in: projects) else {
+            newProjectError = tr("A project with this name already exists.")
+            return
+        }
+        modelContext.insert(Project(name: name, color: Project.suggestedColor(existing: projects)))
         newProjectName = ""
+    }
+
+    private func startEditing(_ project: Project) {
+        editingProject = project
+        editName = project.name
+        editError = nil
     }
 
     private func saveEdit(_ project: Project) {
         let name = editName.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty else { return }
+        guard !name.isEmpty else {
+            editError = tr("Enter a name.")
+            return
+        }
+        guard !Project.isDuplicate(name: name, in: projects, excluding: project) else {
+            editError = tr("A project with this name already exists.")
+            return
+        }
         project.name = name
         editingProject = nil
     }
@@ -311,9 +331,77 @@ struct ProjectsView: View {
         if project.segments.isEmpty {
             projectPendingDelete = project
         } else {
-            deleteErrorMessage = tr("'%@' has %lld time entries. Delete or reassign them first.", project.name, project.segments.count)
-            showDeleteError = true
+            deleteErrorMessage = tr("'%@' has %lld time entries. Delete or reassign them first, or archive the project.",
+                                    project.name, project.segments.count)
+        }
+    }
+}
+
+/// Hours per project for a date range; fetches only that range.
+private struct ProjectReport: View {
+    @Query private var segments: [WorkSegment]
+    private let from: Date
+    private let to: Date
+
+    init(from: Date, to: Date) {
+        self.from = from
+        self.to = to
+        let start = from.startOfDayZurich, end = to.startOfDayZurich.addingDays(1)
+        _segments = Query(filter: #Predicate<WorkSegment> { $0.date >= start && $0.date < end })
+    }
+
+    var body: some View {
+        let breakdown = WorkHoursCalculator.projectBreakdown(from: from, to: to, segments: segments)
+        if breakdown.isEmpty {
+            ContentUnavailableView {
+                Label(tr("No work logged in this period"), systemImage: "chart.bar")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            let maxHours = breakdown.map(\.hours).max() ?? 1
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(breakdown) { item in
+                        row(item, maxHours: maxHours)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+
+                HStack {
+                    Text(tr("Total"))
+                        .font(.subheadline.bold())
+                    Spacer()
+                    Text(TimeFormatting.hours(breakdown.reduce(0) { $0 + $1.hours }))
+                        .font(.body.bold().monospacedDigit())
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+                .padding(.bottom, 20)
+            }
         }
     }
 
+    private func row(_ item: ProjectHours, maxHours: Double) -> some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text(item.project.name)
+                    .font(.subheadline)
+                if item.project.isArchived {
+                    Text(tr("Archived"))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer()
+                Text(TimeFormatting.hours(item.hours))
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            MeterBar(progress: maxHours > 0 ? item.hours / maxHours : 0,
+                     color: item.project.color.color,
+                     height: 6)
+        }
+        .padding(.vertical, 8)
+    }
 }

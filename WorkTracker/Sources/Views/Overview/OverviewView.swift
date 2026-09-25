@@ -3,186 +3,89 @@ import SwiftData
 import AppKit
 import UniformTypeIdentifiers
 
+/// Every number the Overview shows, computed once per update.
+private struct OverviewNumbers {
+    let today: PeriodSummary
+    let week: PeriodSummary
+    let month: PeriodSummary
+    let toDate: PeriodSummary
+    let fullYear: PeriodSummary
+    let calendarYear: PeriodSummary
+    let allTime: PeriodSummary
+    let months: [MonthSummary]
+    let budget: VacationBudget
+    let yearStart: Date
+    let yearEnd: Date
+    /// First and last day of the selected year inside the tracking window (up to today).
+    let window: (start: Date, end: Date)?
+
+    init(calculator: WorkHoursCalculator, hours: [Date: Double], year: Int, trackingStart: Date, now: Date = Date()) {
+        let today = now.startOfDayZurich
+        let cal = Calendar.zurich
+        yearStart = cal.zurichDate(year: year, month: 1, day: 1)
+        yearEnd = cal.zurichDate(year: year, month: 12, day: 31)
+        let effectiveStart = max(trackingStart, yearStart)
+        let effectiveEnd = min(today, yearEnd)
+        window = effectiveStart <= effectiveEnd ? (effectiveStart, effectiveEnd) : nil
+
+        func summary(_ from: Date, _ to: Date) -> PeriodSummary {
+            from <= to ? calculator.periodSummary(from: from, to: to, hours: hours) : .empty
+        }
+        self.today = summary(today, today)
+        week = summary(today.startOfWeekZurich, today)
+        month = summary(cal.date(from: cal.dateComponents([.year, .month], from: today))!, today)
+        toDate = summary(effectiveStart, effectiveEnd)
+        fullYear = summary(effectiveStart, yearEnd)
+        calendarYear = summary(yearStart, yearEnd)
+        allTime = summary(trackingStart, today)
+        months = calculator.monthlyBreakdown(year: year, hours: hours, startDate: trackingStart, endDate: today)
+        budget = calculator.vacationBudget(year: year)
+    }
+}
+
 struct OverviewView: View {
+    @Environment(Preferences.self) private var preferences
     @Query(sort: \WorkSegment.startTime) private var allSegments: [WorkSegment]
-    @Query(sort: \VacationDay.date) private var allVacationDays: [VacationDay]
+    @Query(sort: \VacationDay.date) private var allAbsences: [VacationDay]
 
-    @State private var selectedYear = Calendar.zurich.component(.year, from: Date())
-    @State private var trackingStartDate: Date = AppSettings.trackingStartDate
+    @State private var selectedYear = Date().zurichYear
     @State private var showStartDatePicker = false
-
-    private let calculator = WorkHoursCalculator()
-    private let yearRange = 2026...2036
-
-    private var today: Date { Calendar.zurich.startOfDay(for: Date()) }
-
-    // Effective start for the selected year: max(trackingStartDate, yearStart)
-    private var effectiveYearStart: Date {
-        let yearStart = Calendar.zurich.date(from: DateComponents(
-            timeZone: TimeZone(identifier: "Europe/Zurich"),
-            year: selectedYear, month: 1, day: 1))!
-        return max(trackingStartDate, yearStart)
-    }
-
-    private var yearEnd: Date {
-        Calendar.zurich.date(from: DateComponents(
-            timeZone: TimeZone(identifier: "Europe/Zurich"),
-            year: selectedYear, month: 12, day: 31))!
-    }
-
-    // "Up to today" end: min(today, yearEnd)
-    private var effectiveEnd: Date {
-        min(today, yearEnd)
-    }
-
-    private var absenceLookupForYear: [Date: AbsenceEntry] {
-        var lookup: [Date: AbsenceEntry] = [:]
-        for vd in allVacationDays where Calendar.zurich.component(.year, from: vd.date) == selectedYear {
-            lookup[vd.date.startOfDayZurich] = AbsenceEntry(type: vd.resolvedType, isHalfDay: vd.isHalfDay)
-        }
-        return lookup
-    }
-
-    private var allAbsenceLookup: [Date: AbsenceEntry] {
-        var lookup: [Date: AbsenceEntry] = [:]
-        for vd in allVacationDays {
-            lookup[vd.date.startOfDayZurich] = AbsenceEntry(type: vd.resolvedType, isHalfDay: vd.isHalfDay)
-        }
-        return lookup
-    }
-
-    /// Full calendar year summary (Jan 1 - Dec 31) for pills
-    private var fullCalendarYearSummary: PeriodSummary {
-        let yearStart = Calendar.zurich.date(from: DateComponents(
-            timeZone: TimeZone(identifier: "Europe/Zurich"),
-            year: selectedYear, month: 1, day: 1))!
-        return calculator.periodSummary(from: yearStart, to: yearEnd,
-                                        absenceLookup: absenceLookupForYear, segments: allSegments)
-    }
-
-    // Balance up to today for the selected year
-    private var toDateSummary: PeriodSummary {
-        guard effectiveYearStart <= effectiveEnd else {
-            return PeriodSummary(expectedHours: 0, actualHours: 0,
-                                workingDays: 0, holidayDays: 0, halfDayHolidays: 0,
-                                vacationDays: 0, sickDays: 0)
-        }
-        return calculator.periodSummary(from: effectiveYearStart, to: effectiveEnd,
-                                        absenceLookup: absenceLookupForYear, segments: allSegments)
-    }
-
-    // Full year projection
-    private var fullYearSummary: PeriodSummary {
-        guard effectiveYearStart <= yearEnd else {
-            return PeriodSummary(expectedHours: 0, actualHours: 0,
-                                workingDays: 0, holidayDays: 0, halfDayHolidays: 0,
-                                vacationDays: 0, sickDays: 0)
-        }
-        return calculator.periodSummary(from: effectiveYearStart, to: yearEnd,
-                                        absenceLookup: absenceLookupForYear, segments: allSegments)
-    }
-
-    // Cumulative from tracking start through today
-    private var cumulativeSummary: PeriodSummary {
-        guard trackingStartDate <= today else {
-            return PeriodSummary(expectedHours: 0, actualHours: 0,
-                                workingDays: 0, holidayDays: 0, halfDayHolidays: 0,
-                                vacationDays: 0, sickDays: 0)
-        }
-        return calculator.periodSummary(from: trackingStartDate, to: today,
-                                        absenceLookup: allAbsenceLookup, segments: allSegments)
-    }
-
-    private var monthlyData: [MonthSummary] {
-        calculator.monthlyBreakdown(year: selectedYear,
-                                    absenceLookup: absenceLookupForYear,
-                                    segments: allSegments,
-                                    startDate: trackingStartDate,
-                                    endDate: today)
-    }
-
-    // MARK: - "Right now" snapshot (always present-based, ignores the year picker)
-
-    private var weekStart: Date {
-        let cal = Calendar.zurich
-        let weekday = cal.component(.weekday, from: today)
-        let daysFromMonday = (weekday + 5) % 7
-        return cal.date(byAdding: .day, value: -daysFromMonday, to: today)!
-    }
-
-    private var monthStart: Date {
-        let cal = Calendar.zurich
-        return cal.date(from: cal.dateComponents([.year, .month], from: today))!
-    }
-
-    private var todaySnapshot: PeriodSummary {
-        calculator.periodSummary(from: today, to: today, absenceLookup: allAbsenceLookup, segments: allSegments)
-    }
-    private var weekSnapshot: PeriodSummary {
-        calculator.periodSummary(from: weekStart, to: today, absenceLookup: allAbsenceLookup, segments: allSegments)
-    }
-    private var monthSnapshot: PeriodSummary {
-        calculator.periodSummary(from: monthStart, to: today, absenceLookup: allAbsenceLookup, segments: allSegments)
-    }
+    @State private var exportError: String?
 
     var body: some View {
+        @Bindable var preferences = preferences
+        let calculator = preferences.calculator(absences: VacationDay.lookup(allAbsences))
+        let hours = WorkSegment.hoursByDay(allSegments)
+        let numbers = OverviewNumbers(calculator: calculator, hours: hours, year: selectedYear,
+                                      trackingStart: preferences.trackingStartDate)
+        let allTimeBalance = numbers.allTime.balance + preferences.openingBalanceHours
+        let showsAllTime = preferences.trackingStartDate.zurichYear < selectedYear || preferences.openingBalanceHours != 0
+
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                // Header
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(tr("Overview"))
-                            .font(.title.bold())
-                        HStack(spacing: 4) {
-                            Text(tr("Year"))
-                                .foregroundStyle(.secondary)
-                            Picker("", selection: $selectedYear) {
-                                ForEach(yearRange, id: \.self) { year in
-                                    Text(String(year)).tag(year)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(width: 80)
-                        }
-                        .font(.subheadline)
-                    }
-
-                    Spacer()
-
-                    Button {
-                        exportCSV()
-                    } label: {
-                        Label(tr("Export CSV"), systemImage: "square.and.arrow.up")
-                    }
-                    .help(tr("Export a day-by-day report for %@ as a CSV file", String(selectedYear)))
-                }
-
                 // "Right now" snapshot — answers "am I on track?" at a glance
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text(tr("Right Now"))
                         .font(.headline)
                     HStack(spacing: 12) {
-                        snapshotCard(tr("Today"), todaySnapshot)
-                        snapshotCard(tr("This Week"), weekSnapshot)
-                        snapshotCard(tr("This Month"), monthSnapshot)
+                        snapshotCard(tr("Today"), numbers.today)
+                        snapshotCard(tr("This Week"), numbers.week)
+                        snapshotCard(tr("This Month"), numbers.month)
                     }
                 }
 
                 // Tracking start date
                 HStack(spacing: 8) {
                     Image(systemName: "calendar.badge.clock")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.accentColor)
                         .font(.caption)
                     Text(tr("Tracking since"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     if showStartDatePicker {
-                        DatePicker("", selection: $trackingStartDate, displayedComponents: .date)
+                        DatePicker("", selection: $preferences.trackingStartDate, displayedComponents: .date)
                             .labelsHidden()
-                            .onChange(of: trackingStartDate) { _, newValue in
-                                AppSettings.trackingStartDate = newValue
-                            }
                         Button(tr("Done")) {
                             showStartDatePicker = false
                         }
@@ -191,81 +94,74 @@ struct OverviewView: View {
                         Button {
                             showStartDatePicker = true
                         } label: {
-                            Text(trackingStartDate, format: .dateTime.day().month(.wide).year())
+                            Text(preferences.trackingStartDate, format: .app.day().month(.wide).year())
                                 .font(.caption.bold())
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.accentColor)
                     }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 8).fill(.blue.opacity(0.06)))
+                .cardSurface(tint: .accentColor, radius: Surface.rowRadius)
 
                 // Primary: Balance to date
                 HStack(spacing: 12) {
                     statCard(
                         icon: "target",
-                        iconColor: .blue,
+                        iconColor: .accentColor,
                         title: tr("Expected (to date)"),
-                        value: TimeFormatting.hours(toDateSummary.expectedHours),
-                        detail: tr("%lld working days", toDateSummary.workingDays)
+                        value: TimeFormatting.hours(numbers.toDate.expectedHours),
+                        detail: tr("%lld working days", numbers.toDate.workingDays)
                     )
                     statCard(
                         icon: "checkmark.circle",
                         iconColor: .green,
                         title: tr("Worked (to date)"),
-                        value: TimeFormatting.hours(toDateSummary.actualHours),
+                        value: TimeFormatting.hours(numbers.toDate.actualHours),
                         detail: nil
                     )
-                    balanceCard(
-                        title: tr("Current Balance"),
-                        balance: toDateSummary.balance
-                    )
-                    if Calendar.zurich.component(.year, from: trackingStartDate) < selectedYear {
-                        balanceCard(
-                            title: tr("All-time Balance"),
-                            balance: cumulativeSummary.balance
-                        )
+                    balanceCard(title: tr("Current Balance"), balance: numbers.toDate.balance, detail: nil)
+                    if showsAllTime {
+                        balanceCard(title: tr("All-time Balance"), balance: allTimeBalance,
+                                    detail: preferences.openingBalanceHours != 0
+                                        ? tr("incl. %@ opening balance", TimeFormatting.signedHours(preferences.openingBalanceHours))
+                                        : nil)
                     }
                 }
 
                 // Full year info (secondary)
-                if selectedYear == Calendar.zurich.component(.year, from: Date()) {
+                if selectedYear == Date().zurichYear {
                     HStack(spacing: 16) {
-                        Label(tr("Full year target: %@", TimeFormatting.hours(fullYearSummary.expectedHours)),
+                        Label(tr("Full year target: %@", TimeFormatting.hours(numbers.fullYear.expectedHours)),
                               systemImage: "calendar")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Label(tr("Remaining: %@", TimeFormatting.hours(max(0, fullYearSummary.expectedHours - toDateSummary.actualHours))),
+                        Label(tr("Remaining: %@", TimeFormatting.hours(max(0, numbers.fullYear.expectedHours - numbers.toDate.actualHours))),
                               systemImage: "hourglass")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
                 // Info pills — always show full calendar year counts
-                HStack(spacing: 8) {
-                    infoPill(icon: "flag.fill",
-                             text: tr("%lld public holidays", fullCalendarYearSummary.holidayDays),
-                             color: .orange)
-                        .help(tr("Full days off (0h expected) — e.g. Karfreitag, Weihnachten, Bundesfeier"))
+                FlowLayout(spacing: 8) {
+                    TintedPill(text: tr("%lld public holidays", numbers.calendarYear.holidayDays),
+                               icon: "flag.fill", color: .orange)
+                        .help(tr("Full days off on your working days — e.g. Karfreitag, Weihnachten, Bundesfeier"))
 
-                    infoPill(icon: "flag",
-                             text: tr("%lld half-day holidays", fullCalendarYearSummary.halfDayHolidays),
-                             color: .orange)
-                        .help(tr("Half days off (4h expected) — Sechseläuten, Knabenschiessen, Silvester"))
+                    TintedPill(text: tr("%lld half-day holidays", numbers.calendarYear.halfDayHolidays),
+                               icon: "flag", color: .orange)
+                        .help(tr("Half days off — Sechseläuten, Knabenschiessen, Silvester"))
 
-                    infoPill(icon: "airplane",
-                             text: tr("%@/%@ vacation days", TimeFormatting.days(fullCalendarYearSummary.vacationDays), TimeFormatting.days(AppSettings.vacationEntitlement)),
-                             color: .blue)
-                        .help(tr("Vacation days used this year (Jan–Dec). Half-day holidays count as 0.5 days."))
+                    TintedPill(text: tr("%@/%@ vacation days", TimeFormatting.days(numbers.budget.used), TimeFormatting.days(numbers.budget.available)),
+                               icon: "airplane", color: numbers.budget.remaining < 0 ? .red : .blue)
+                        .help(numbers.budget.carriedIn > 0
+                              ? tr("Vacation days used this year, of %@ entitlement plus %@ carried over. Half-day holidays count as 0.5 days.",
+                                   TimeFormatting.days(numbers.budget.entitlement), TimeFormatting.days(numbers.budget.carriedIn))
+                              : tr("Vacation days used this year (Jan–Dec). Half-day holidays count as 0.5 days."))
 
-                    if fullCalendarYearSummary.sickDays > 0 {
-                        infoPill(icon: "thermometer.medium",
-                                 text: tr("%@ sick days", TimeFormatting.days(fullCalendarYearSummary.sickDays)),
-                                 color: .red)
-                            .help(tr("Sick days used this year. Treated as full work days — no balance impact."))
+                    ForEach(numbers.calendarYear.categoryTotals.filter { $0.category.builtIn != .vacation }) { total in
+                        TintedPill(text: tr("%@: %@", total.category.name, TimeFormatting.dayCount(total.days)),
+                                   icon: total.category.icon, color: total.category.color.color)
                     }
                 }
 
@@ -274,12 +170,41 @@ struct OverviewView: View {
                     Text(tr("Monthly Breakdown"))
                         .font(.headline)
 
-                    MonthlyBreakdownView(months: monthlyData)
+                    MonthlyBreakdownView(months: numbers.months)
                 }
             }
             .padding(24)
         }
         .navigationTitle(tr("Overview"))
+        .toolbar {
+            ToolbarItem {
+                YearPicker(selection: $selectedYear,
+                           dataYears: allSegments.map(\.date.zurichYear) + allAbsences.map(\.date.zurichYear))
+            }
+            .visibilityPriority(.high)
+
+            ToolbarSpacer(.fixed)
+
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button(tr("Daily Summary…")) { exportDaily(calculator: calculator, hours: hours, numbers: numbers) }
+                        .disabled(numbers.window == nil)
+                    Button(tr("Time Entries…")) { exportEntries() }
+                    Divider()
+                    Picker(tr("Format"), selection: $preferences.csvFormat) {
+                        ForEach(CSVFormat.allCases) { Text($0.title).tag($0) }
+                    }
+                } label: {
+                    Label(tr("Export CSV"), systemImage: "square.and.arrow.up")
+                }
+                .help(tr("Export %@ as a CSV file", String(selectedYear)))
+            }
+        }
+        .alert(tr("Export failed"), isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button(tr("OK")) {}
+        } message: {
+            Text(exportError ?? "")
+        }
     }
 
     private func statCard(icon: String, iconColor: Color, title: String, value: String, detail: String?) -> some View {
@@ -296,14 +221,14 @@ struct OverviewView: View {
                 .font(.title3.bold().monospacedDigit())
             Text(detail ?? " ")
                 .font(.caption2)
-                .foregroundColor(detail != nil ? .secondary.opacity(0.5) : .clear)
+                .foregroundStyle(detail != nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.clear))
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
+        .cardSurface()
     }
 
-    private func balanceCard(title: String, balance: Double) -> some View {
+    private func balanceCard(title: String, balance: Double, detail: String?) -> some View {
         let color: Color = balance >= 0 ? .green : .red
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -314,25 +239,16 @@ struct OverviewView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text("\(balance >= 0 ? "+" : "-")\(TimeFormatting.hours(abs(balance)))")
+            Text(TimeFormatting.signedHours(balance))
                 .font(.title3.bold().monospacedDigit())
                 .foregroundStyle(color)
-            Text(balance >= 0 ? tr("overtime") : tr("undertime"))
+            Text(detail ?? (balance >= 0 ? tr("overtime") : tr("undertime")))
                 .font(.caption2)
                 .foregroundStyle(color.opacity(0.7))
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(color.opacity(0.06)))
-    }
-
-    private func infoPill(icon: String, text: String, color: Color) -> some View {
-        Label(text, systemImage: icon)
-            .font(.caption)
-            .foregroundStyle(color)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(color.opacity(0.1)))
+        .cardSurface(tint: color)
     }
 
     private func snapshotCard(_ title: String, _ summary: PeriodSummary) -> some View {
@@ -346,9 +262,7 @@ struct OverviewView: View {
             HStack(spacing: 4) {
                 Image(systemName: summary.balance >= 0 ? "arrow.up.right" : "arrow.down.right")
                     .font(.caption2)
-                Text(tr("%@ vs %@",
-                        "\(summary.balance >= 0 ? "+" : "-")\(TimeFormatting.hours(abs(summary.balance)))",
-                        TimeFormatting.hours(summary.expectedHours)))
+                Text(tr("%@ vs %@", TimeFormatting.signedHours(summary.balance), TimeFormatting.hours(summary.expectedHours)))
                     .font(.caption2)
                     .monospacedDigit()
             }
@@ -356,56 +270,34 @@ struct OverviewView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
+        .cardSurface()
         .accessibilityElement(children: .combine)
     }
 
     // MARK: - CSV export
 
-    /// Day-by-day report for the selected year (clamped to the tracking window and
-    /// today), suitable for handing to payroll/HR.
-    private func exportCSV() {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.timeZone = TimeZone(identifier: "Europe/Zurich")
-        df.dateFormat = "yyyy-MM-dd"
-
-        func hours(_ value: Double) -> String { String(format: "%.2f", value) }
-
-        let header = [tr("Date"), tr("Weekday"), tr("Expected hours"),
-                      tr("Worked hours"), tr("Balance hours"), tr("Absence")].joined(separator: ",")
-        var rows = [header]
-        var totalExpected = 0.0
-        var totalWorked = 0.0
-
-        for day in effectiveYearStart.daysThrough(effectiveEnd) {
-            let cls = calculator.classify(date: day, absenceLookup: allAbsenceLookup)
-            let worked = allSegments
-                .filter { $0.date.isSameDay(as: day) }
-                .reduce(0.0) { $0 + $1.durationHours }
-            totalExpected += cls.expectedHours
-            totalWorked += worked
-
-            let absence: String
-            if cls.isWeekend { absence = tr("Weekend") }
-            else if cls.isVacation { absence = cls.isHalfDayVacation ? tr("Vacation (half)") : tr("Vacation") }
-            else if cls.isSick { absence = cls.isHalfDaySick ? tr("Sick (half)") : tr("Sick") }
-            else if cls.isHoliday { absence = cls.holidayName ?? tr("Holiday") }
-            else { absence = "" }
-
-            let weekday = day.formatted(.dateTime.weekday(.abbreviated))
-            rows.append("\(df.string(from: day)),\(weekday),\(hours(cls.expectedHours)),\(hours(worked)),\(hours(worked - cls.expectedHours)),\"\(absence)\"")
-        }
-        rows.append("\(tr("Total")),,\(hours(totalExpected)),\(hours(totalWorked)),\(hours(totalWorked - totalExpected)),")
-
-        let csv = rows.joined(separator: "\n")
-        let panel = NSSavePanel()
-        panel.title = tr("Export Time Report")
-        panel.nameFieldStringValue = "WorkTracker-\(selectedYear).csv"
-        panel.allowedContentTypes = [.commaSeparatedText]
-        if panel.runModal() == .OK, let url = panel.url {
-            try? csv.write(to: url, atomically: true, encoding: .utf8)
-        }
+    /// Day-by-day report for the selected year, clamped to the tracking window and today.
+    private func exportDaily(calculator: WorkHoursCalculator, hours: [Date: Double], numbers: OverviewNumbers) {
+        guard let window = numbers.window else { return }
+        let days = window.start.daysThrough(window.end).map(calculator.classify(date:))
+        let csv = CSVExporter(format: preferences.csvFormat).dailyReport(days: days, hours: hours)
+        save(csv, name: "WorkTracker-\(selectedYear)-\(tr("daily")).csv")
     }
 
+    /// Every time entry in the selected year.
+    private func exportEntries() {
+        let segments = allSegments.filter { $0.date.zurichYear == selectedYear }
+        let csv = CSVExporter(format: preferences.csvFormat).entries(segments)
+        save(csv, name: "WorkTracker-\(selectedYear)-\(tr("entries")).csv")
+    }
+
+    private func save(_ csv: String, name: String) {
+        let panel = NSSavePanel()
+        panel.title = tr("Export Time Report")
+        panel.nameFieldStringValue = name
+        panel.allowedContentTypes = [.commaSeparatedText]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do { try csv.write(to: url, atomically: true, encoding: .utf8) }
+        catch { exportError = error.localizedDescription }
+    }
 }

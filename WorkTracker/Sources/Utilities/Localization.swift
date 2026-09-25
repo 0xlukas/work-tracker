@@ -11,16 +11,17 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .system: return "System"
+        case .system: return tr("System")
         case .en: return "English"
         case .de: return "Deutsch"
         }
     }
 }
 
-/// Tiny localization layer. Strings live in `en.lproj`/`de.lproj` Localizable.strings
-/// inside the package's resource bundle (`Bundle.module`). The English source text is
-/// used as the lookup key, so a missing translation gracefully falls back to English.
+/// Tiny localization layer over the String Catalog (`Localizable.xcstrings`) in the
+/// package's resource bundle. The English source text is the lookup key, so a missing
+/// translation falls back to English. Plural keys (`%lld …`) use the catalog's plural
+/// variations.
 enum Localization {
     static let storageKey = "appLanguage"
 
@@ -36,28 +37,41 @@ enum Localization {
         Bundle.main.path(forResource: "de", ofType: "lproj") != nil ? .main : .module
     }
 
-    private static func resolvedBundle() -> Bundle {
+    /// The language actually shown: the forced one, or the best system match.
+    static var effectiveLanguageCode: String {
         switch current {
+        case .en: return "en"
+        case .de: return "de"
         case .system:
-            return baseBundle
-        case .en:
-            return lprojBundle("en")
-        case .de:
-            return lprojBundle("de")
+            return Bundle.preferredLocalizations(from: ["en", "de"], forPreferences: Locale.preferredLanguages).first ?? "en"
         }
     }
 
-    private static func lprojBundle(_ code: String) -> Bundle {
+    /// Locale for dates and numbers: the UI language with the user's region, so
+    /// month and weekday names match the UI language.
+    static var locale: Locale {
+        if current == .system { return .autoupdatingCurrent }
+        let region = Locale.current.region?.identifier ?? "CH"
+        return Locale(identifier: "\(effectiveLanguageCode)_\(region)")
+    }
+
+    private static func bundle(for code: String) -> Bundle {
         let base = baseBundle
-        if let path = base.path(forResource: code, ofType: "lproj"),
-           let bundle = Bundle(path: path) {
+        if let path = base.path(forResource: code, ofType: "lproj"), let bundle = Bundle(path: path) {
             return bundle
         }
         return base
     }
 
     static func string(_ key: String) -> String {
-        resolvedBundle().localizedString(forKey: key, value: key, table: nil)
+        let bundle = current == .system ? baseBundle : bundle(for: effectiveLanguageCode)
+        return bundle.localizedString(forKey: key, value: key, table: nil)
+    }
+
+    /// Every translation of `key`, for matching user input against built-in names in
+    /// any language.
+    static func allTranslations(of key: String) -> Set<String> {
+        Set(["en", "de"].map { bundle(for: $0).localizedString(forKey: key, value: key, table: nil) } + [key])
     }
 }
 
@@ -67,6 +81,7 @@ func tr(_ key: String) -> String {
 }
 
 /// Localize a format string and substitute arguments (e.g. `tr("of %@ expected", h)`).
+/// Integer arguments pick the catalog's plural variation.
 func tr(_ key: String, _ args: CVarArg...) -> String {
-    String(format: Localization.string(key), arguments: args)
+    String(format: Localization.string(key), locale: Localization.locale, arguments: args)
 }

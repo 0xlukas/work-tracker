@@ -4,7 +4,9 @@ import PackageDescription
 let package = Package(
     name: "WorkTracker",
     defaultLocalization: "en",
-    platforms: [.macOS(.v14)],
+    // macOS 27 only — the UI targets the current Liquid Glass design language and
+    // makes no attempt at backwards compatibility.
+    platforms: [.macOS("27.0")],
     targets: [
         .executableTarget(
             name: "WorkTracker",
@@ -12,6 +14,7 @@ let package = Package(
             resources: [
                 .process("Resources")
             ]
-        )
+        ),
+        .testTarget(name: "WorkTrackerTests", dependencies: ["WorkTracker"])
     ]
 )

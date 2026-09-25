@@ -7,16 +7,19 @@ struct DailyQuoteOverlayView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.88)
+            // Dim the workspace; the quote floats above it on a Liquid Glass slab.
+            Rectangle()
+                .fill(.black.opacity(0.78))
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onDismiss)
 
             VStack(spacing: 0) {
-                Spacer()
-
                 // Red star accent
                 Image(systemName: "star.fill")
                     .font(.largeTitle)
-                    .foregroundStyle(.red.opacity(0.7))
-                    .padding(.bottom, 32)
+                    .foregroundStyle(.red.opacity(0.75))
+                    .padding(.bottom, 28)
                     .accessibilityHidden(true)
 
                 // Quote
@@ -26,7 +29,6 @@ struct DailyQuoteOverlayView: View {
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .lineSpacing(8)
-                    .frame(maxWidth: 560)
 
                 // Attribution
                 VStack(spacing: 4) {
@@ -41,27 +43,36 @@ struct DailyQuoteOverlayView: View {
                     }
                 }
                 .padding(.top, 24)
+            }
+            .padding(.horizontal, 48)
+            .padding(.vertical, 44)
+            .frame(maxWidth: 640)
+            .glassEffect(.regular, in: .rect(cornerRadius: 28))
+            .contentShape(.rect(cornerRadius: 28))
+            .onTapGesture(perform: onDismiss)
+            .padding(48)
 
+            // Dismiss hint (not hit-testable, so clicks reach the backdrop)
+            VStack {
                 Spacer()
-
-                // Dismiss hint
                 Text(tr("Press any key, or click anywhere, to start your day"))
                     .font(.callout)
                     .foregroundStyle(.white.opacity(0.6))
                     .padding(.bottom, 28)
             }
-            .padding(48)
+            .allowsHitTesting(false)
 
             // Visible, accessible close affordance (Escape and any-key also dismiss).
             VStack {
                 HStack {
                     Spacer()
                     Button(action: onDismiss) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(.white.opacity(0.7))
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 16, height: 16)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glass)
                     .keyboardShortcut(.cancelAction)   // Escape
                     .help(tr("Dismiss (Esc)"))
                     .accessibilityLabel(tr("Dismiss quote"))
@@ -70,7 +81,7 @@ struct DailyQuoteOverlayView: View {
                 Spacer()
             }
 
-            // Invisible key/mouse capture (any key or click dismisses)
+            // Invisible key capture (any key dismisses)
             KeyCaptureRepresentable(onEvent: onDismiss)
                 .frame(width: 0, height: 0)
         }
@@ -109,7 +120,4 @@ final class KeyCaptureNSView: NSView {
         onEvent?()
     }
 
-    override func mouseDown(with event: NSEvent) {
-        onEvent?()
-    }
 }
