@@ -97,8 +97,10 @@ private struct MenuBarToday: View {
         let calculator = preferences.calculator(absences: VacationDay.lookup(absences))
         let hours = WorkSegment.hoursByDay(weekSegments)
         let running = timer.isRunning ? timer.elapsed / 3600 : 0
-        let day = calculator.periodSummary(from: today, to: today, hours: hours)
-        let week = calculator.periodSummary(from: today.startOfWeekZurich, to: today, hours: hours)
+        let start = preferences.trackingStartDate
+        let day = today >= start ? calculator.periodSummary(from: today, to: today, hours: hours) : .empty
+        let weekStart = max(today.startOfWeekZurich, start)
+        let week = weekStart <= today ? calculator.periodSummary(from: weekStart, to: today, hours: hours) : .empty
 
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {

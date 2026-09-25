@@ -160,6 +160,9 @@ enum StoreLocation {
             do {
                 try fm.copyItem(at: snapshot, to: store)
             } catch {
+                // A failed copy can leave a partial file, which would block moving the
+                // original back (and be opened as a corrupt store at launch).
+                DatabaseBackup.removeWithSidecars(store)
                 if let aside {
                     for suffix in siblingSuffixes {
                         let file = aside.appendingPathComponent(fileName + suffix)

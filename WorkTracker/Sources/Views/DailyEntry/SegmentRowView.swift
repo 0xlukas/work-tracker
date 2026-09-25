@@ -91,6 +91,9 @@ struct SegmentRowView: View {
             Button(role: .destructive) { onDelete() } label: { Label(tr("Delete Entry"), systemImage: "trash") }
         }
         .accessibilityElement(children: .combine)
+        .accessibilityAction(named: tr("Edit Entry")) { onEdit() }
+        .accessibilityAction(named: tr("Duplicate Entry")) { onDuplicate() }
+        .accessibilityAction(named: tr("Delete Entry")) { onDelete() }
         .accessibilityLabel(tr("Time entry %@ to %@, %@", start, end, TimeFormatting.hours(segment.durationHours))
                             + (segment.project.map { ", \($0.name)" } ?? "")
                             + (segment.note.isEmpty ? "" : ", \(segment.note)"))
