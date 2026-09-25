@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 enum NavigationItem: String, CaseIterable, Identifiable {
     case dailyEntry = "Daily Entry"
@@ -19,19 +20,23 @@ enum NavigationItem: String, CaseIterable, Identifiable {
 }
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.undoManager) private var undoManager
+    @Environment(Preferences.self) private var preferences
     @State private var selection: NavigationItem? = .dailyEntry
     @State private var showDailyQuote = false
-    // Re-reads on change so switching language in Settings rebuilds the UI (via .id).
-    @AppStorage(Localization.storageKey) private var appLanguage: AppLanguage = .system
 
     var body: some View {
         ZStack {
             NavigationSplitView {
+                // The system sidebar extends to the window edge and takes on the
+                // macOS 27 glass treatment on its own; keep it a plain List of Labels.
                 List(NavigationItem.allCases, selection: $selection) { item in
                     Label(tr(item.rawValue), systemImage: item.icon)
                         .tag(item)
                 }
-                .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+                .listStyle(.sidebar)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
             } detail: {
                 switch selection {
                 case .dailyEntry:
@@ -43,27 +48,31 @@ struct ContentView: View {
                 case .overview:
                     OverviewView()
                 case nil:
-                    Text(tr("Select an item from the sidebar"))
-                        .foregroundStyle(.secondary)
+                    ContentUnavailableView(tr("Select an item from the sidebar"), systemImage: "sidebar.left")
                 }
             }
-            .frame(minWidth: 800, minHeight: 600)
-            .id(appLanguage)
+            .frame(minWidth: 860, minHeight: 620)
+            .disabled(showDailyQuote)
 
             if showDailyQuote {
                 DailyQuoteOverlayView(quote: DailyQuote.quoteOfTheDay()) {
                     withAnimation(.easeOut(duration: 0.3)) {
                         showDailyQuote = false
                     }
-                    AppSettings.lastQuoteShownDate = Date()
+                    preferences.lastQuoteShownDate = Date()
                 }
                 .transition(.opacity)
             }
         }
         .onAppear {
-            if AppSettings.shouldShowDailyQuote {
+            // Edit ▸ Undo (⌘Z) covers every change made through the shared context.
+            modelContext.undoManager = undoManager
+            if preferences.shouldShowDailyQuote {
                 showDailyQuote = true
             }
+        }
+        .onChange(of: undoManager) { _, manager in
+            modelContext.undoManager = manager
         }
     }
 }

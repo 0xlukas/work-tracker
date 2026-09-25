@@ -1,337 +1,358 @@
 import SwiftUI
 import SwiftData
 
+/// Which entry sheet is open.
+enum EntrySheet: Identifiable {
+    case new(start: Date)
+    case edit(WorkSegment)
+    case duplicate(WorkSegment, start: Date)
+
+    var id: String {
+        switch self {
+        case .new(let start): return "new-\(start.timeIntervalSinceReferenceDate)"
+        case .edit(let segment): return "edit-\(segment.persistentModelID.hashValue)"
+        case .duplicate(let segment, _): return "dup-\(segment.persistentModelID.hashValue)"
+        }
+    }
+}
+
 struct DailyEntryView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \WorkSegment.startTime) private var allSegments: [WorkSegment]
-    @Query(sort: \Project.name) private var projects: [Project]
-    @Query(sort: \VacationDay.date) private var allVacationDays: [VacationDay]
+    @Environment(Preferences.self) private var preferences
+    @Query(sort: \VacationDay.date) private var absences: [VacationDay]
 
-    @State private var selectedDate = Date()
-    @State private var showAddSheet = false
-    @State private var editingSegment: WorkSegment?
-    @State private var segmentPendingDelete: WorkSegment?
+    @State private var selectedDate = Date().startOfDayZurich
+    @State private var sheet: EntrySheet?
+    @State private var statusMessage: String?
 
-    private var segmentsForDate: [WorkSegment] {
-        let dayStart = selectedDate.startOfDayZurich
-        return allSegments.filter { $0.date.isSameDay(as: dayStart) }
-            .sorted { $0.startTime < $1.startTime }
+    var body: some View {
+        let calculator = preferences.calculator(absences: VacationDay.lookup(absences))
+        DailyEntryWeek(selectedDate: $selectedDate, calculator: calculator, statusMessage: statusMessage,
+                       onEdit: { sheet = .edit($0) },
+                       onDuplicate: { sheet = .duplicate($0, start: nextStart(on: $0.date)) },
+                       onDelete: { modelContext.delete($0) })
+            .navigationTitle(tr("Daily Entry"))
+            .toolbar { toolbar }
+            .sheet(item: $sheet) { sheet in
+                switch sheet {
+                case .new(let start):
+                    SegmentEditSheet(date: selectedDate, segment: nil, suggestedStart: start)
+                case .edit(let segment):
+                    SegmentEditSheet(date: selectedDate, segment: segment)
+                case .duplicate(let segment, let start):
+                    SegmentEditSheet(date: segment.date, segment: nil, suggestedStart: start, template: segment)
+                }
+            }
+            .task(id: statusMessage) {
+                guard statusMessage != nil else { return }
+                try? await Task.sleep(for: .seconds(6))
+                statusMessage = nil
+            }
     }
 
-    private var dailyTotal: Double {
-        segmentsForDate.reduce(0) { $0 + $1.durationHours }
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
+            Button { selectedDate = selectedDate.addingDays(-1) } label: {
+                Label(tr("Previous Day"), systemImage: "chevron.left")
+            }
+            .keyboardShortcut("[", modifiers: .command)
+            .help(tr("Previous day (⌘[)"))
+
+            Button { selectedDate = selectedDate.addingDays(1) } label: {
+                Label(tr("Next Day"), systemImage: "chevron.right")
+            }
+            .keyboardShortcut("]", modifiers: .command)
+            .help(tr("Next day (⌘])"))
+        }
+
+        ToolbarItem {
+            Button(tr("Today")) { selectedDate = Date().startOfDayZurich }
+                .disabled(selectedDate.isSameDay(as: Date()))
+                .help(tr("Jump to today (⌘T)"))
+                .keyboardShortcut("t", modifiers: .command)
+        }
+
+        ToolbarItem {
+            TimerControl()
+        }
+
+        ToolbarItem {
+            Menu {
+                if let previous = EntryActions.previousDayWithEntries(before: selectedDate, in: modelContext) {
+                    Button(tr("Copy Entries from %@", previous.formatted(.app.weekday(.abbreviated).day().month(.abbreviated)))) {
+                        copyEntries(from: previous)
+                    }
+                } else {
+                    Text(tr("No earlier entries to copy"))
+                }
+            } label: {
+                Label(tr("More"), systemImage: "ellipsis")
+            }
+            .help(tr("More actions"))
+        }
+
+        ToolbarSpacer(.fixed)
+
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                sheet = .new(start: nextStart(on: selectedDate))
+            } label: {
+                Label(tr("Add Entry"), systemImage: "plus")
+            }
+            .buttonStyle(.glassProminent)
+            .keyboardShortcut("n", modifiers: .command)
+            .help(tr("Add a time entry (⌘N)"))
+        }
     }
 
     /// Start time to pre-fill a new entry with: the end of the day's last segment,
     /// or 08:10 when the day has none.
-    private var defaultStartForNewEntry: Date {
-        if let lastEnd = segmentsForDate.map(\.endTime).max() {
-            return lastEnd
+    private func nextStart(on day: Date) -> Date {
+        if let lastEnd = EntryActions.segments(on: day, in: modelContext).map(\.endTime).max() {
+            return min(lastEnd, day.startOfDayZurich.addingDays(1).addingTimeInterval(-60))
         }
-        return Calendar.zurich.date(bySettingHour: 8, minute: 10, second: 0, of: selectedDate)
-            ?? selectedDate
+        return Calendar.zurich.date(bySettingHour: 8, minute: 10, second: 0, of: day.startOfDayZurich) ?? day
     }
 
-    private let calculator = WorkHoursCalculator()
-
-    private var absenceLookup: [Date: AbsenceEntry] {
-        var lookup: [Date: AbsenceEntry] = [:]
-        for vd in allVacationDays {
-            lookup[vd.date.startOfDayZurich] = AbsenceEntry(type: vd.resolvedType, isHalfDay: vd.isHalfDay)
+    private func copyEntries(from source: Date) {
+        let result = EntryActions.copyEntries(from: source, to: selectedDate, in: modelContext)
+        let day = source.formatted(.app.weekday(.abbreviated).day().month(.abbreviated))
+        if result.skipped > 0 {
+            statusMessage = tr("Copied %lld entries from %@; %lld skipped because they overlap.", result.copied, day, result.skipped)
+        } else {
+            statusMessage = tr("Copied %lld entries from %@.", result.copied, day)
         }
-        return lookup
     }
+}
 
-    private var daySummary: DaySummary {
-        calculator.classify(date: selectedDate, absenceLookup: absenceLookup)
-    }
+// MARK: - Week content (only the selected week's entries are fetched)
 
-    /// The current week containing the selected date: Mon–Fri always, plus Sat/Sun
-    /// only when work is logged on them (so weekend hours aren't silently hidden).
-    private var currentWeekDays: [Date] {
-        let cal = Calendar.zurich
-        let weekday = cal.component(.weekday, from: selectedDate) // 1=Sun, 2=Mon, ..., 7=Sat
-        let daysFromMonday = (weekday + 5) % 7 // Mon=0, Tue=1, ..., Sun=6
-        guard let monday = cal.date(byAdding: .day, value: -daysFromMonday, to: selectedDate) else { return [] }
-        return (0..<7).compactMap { offset in
-            guard let day = cal.date(byAdding: .day, value: offset, to: monday) else { return nil }
-            if offset >= 5 { // Saturday/Sunday — show only if there's work that day
-                let hasWork = allSegments.contains { $0.date.isSameDay(as: day) }
-                return hasWork ? day : nil
-            }
-            return day
-        }
+private struct DailyEntryWeek: View {
+    @Binding var selectedDate: Date
+    let calculator: WorkHoursCalculator
+    let statusMessage: String?
+    let onEdit: (WorkSegment) -> Void
+    let onDuplicate: (WorkSegment) -> Void
+    let onDelete: (WorkSegment) -> Void
+
+    @Query private var weekSegments: [WorkSegment]
+
+    init(selectedDate: Binding<Date>, calculator: WorkHoursCalculator, statusMessage: String?,
+         onEdit: @escaping (WorkSegment) -> Void, onDuplicate: @escaping (WorkSegment) -> Void,
+         onDelete: @escaping (WorkSegment) -> Void) {
+        _selectedDate = selectedDate
+        self.calculator = calculator
+        self.statusMessage = statusMessage
+        self.onEdit = onEdit
+        self.onDuplicate = onDuplicate
+        self.onDelete = onDelete
+        let start = selectedDate.wrappedValue.startOfWeekZurich
+        let end = start.addingDays(7)
+        _weekSegments = Query(filter: #Predicate<WorkSegment> { $0.date >= start && $0.date < end },
+                              sort: \WorkSegment.startTime)
     }
 
     var body: some View {
+        let hours = WorkSegment.hoursByDay(weekSegments)
+        let day = selectedDate.startOfDayZurich
+        let summary = calculator.classify(date: day)
+        let segments = weekSegments.filter { $0.date.isSameDay(as: day) }
+
         HStack(spacing: 0) {
-            // Left panel
-            VStack(spacing: 0) {
-                // Calendar
-                DatePicker("", selection: $selectedDate, displayedComponents: .date)
-                    .datePickerStyle(.graphical)
-                    .labelsHidden()
-                    .padding(.horizontal, 12)
-                    .padding(.top, 12)
-
-                Divider()
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-
-                // Week at a glance
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(tr("This Week"))
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-
-                    VStack(spacing: 2) {
-                        ForEach(currentWeekDays, id: \.self) { day in
-                            weekDayRow(day)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                }
-
-                Divider()
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-
-                // Day info
-                VStack(alignment: .leading, spacing: 6) {
-                    if daySummary.isHoliday, let name = daySummary.holidayName {
-                        HStack(spacing: 6) {
-                            Image(systemName: "flag.fill")
-                                .foregroundStyle(.orange)
-                            Text(daySummary.isHalfDayHoliday ? tr("%@ (half day)", name) : name)
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                    }
-
-                    if daySummary.isSick {
-                        HStack(spacing: 6) {
-                            Image(systemName: "thermometer.medium")
-                                .foregroundStyle(.red)
-                            Text(daySummary.isHalfDaySick ? tr("Sick (half day)") : tr("Sick day"))
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                    }
-
-                    if daySummary.isVacation {
-                        HStack(spacing: 6) {
-                            Image(systemName: "airplane")
-                                .foregroundStyle(.blue)
-                            Text(daySummary.isHalfDayVacation ? tr("Vacation (half day)") : tr("Vacation"))
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                    }
-
-                    if selectedDate.isWeekend {
-                        HStack(spacing: 6) {
-                            Image(systemName: "moon.fill")
-                                .foregroundStyle(.purple)
-                            Text(tr("Weekend"))
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                    }
-                }
-
-                Spacer()
-            }
-            .frame(width: 260)
-
+            sidePanel(hours: hours, summary: summary)
+                .frame(width: 272)
             Divider()
-
-            // Right: Time entries
-            VStack(alignment: .leading, spacing: 0) {
-                // Header
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(selectedDate, format: .dateTime.weekday(.wide).day().month(.wide).year())
-                            .font(.title2.bold())
-
-                        HStack(spacing: 12) {
-                            Label(TimeFormatting.hours(dailyTotal), systemImage: "clock")
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-
-                            if daySummary.expectedHours > 0 {
-                                Text(tr("of %@ expected", TimeFormatting.hours(daySummary.expectedHours)))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-
-                                if dailyTotal > daySummary.expectedHours {
-                                    Text(tr("· +%@ over", TimeFormatting.hours(dailyTotal - daySummary.expectedHours)))
-                                        .font(.subheadline)
-                                        .foregroundStyle(.green)
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer()
-
-                    Button(tr("Today")) { selectedDate = Date() }
-                        .controlSize(.regular)
-                        .disabled(selectedDate.isSameDay(as: Date()))
-                        .help(tr("Jump to today (⌘T)"))
-                        .keyboardShortcut("t", modifiers: .command)
-
-                    Button {
-                        showAddSheet = true
-                    } label: {
-                        Label(tr("Add Entry"), systemImage: "plus")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
-                    .keyboardShortcut("n", modifiers: .command)
-                    .help(tr("Add a time entry (⌘N)"))
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
-
-                // Progress bar
-                if daySummary.expectedHours > 0 {
-                    let progress = min(dailyTotal / daySummary.expectedHours, 1.5)
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(.primary.opacity(0.08))
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(dailyTotal >= daySummary.expectedHours ? .green : .blue)
-                                .frame(width: geo.size.width * min(progress, 1.0))
-                        }
-                    }
-                    .frame(height: 4)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 12)
-                }
-
-                Divider()
-                    .padding(.horizontal, 24)
-
-                // Segments
-                if segmentsForDate.isEmpty {
-                    Spacer()
-                    VStack(spacing: 12) {
-                        Image(systemName: "clock")
-                            .font(.system(size: 36))
-                            .foregroundStyle(.quaternary)
-                        Text(tr("No time entries yet"))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Text(tr("Click \"Add Entry\" or press ⌘N to log your work"))
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    Spacer()
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 2) {
-                            ForEach(segmentsForDate) { segment in
-                                SegmentRowView(segment: segment) {
-                                    editingSegment = segment
-                                } onDelete: {
-                                    segmentPendingDelete = segment
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                    }
-                }
-            }
-        }
-        .navigationTitle(tr("Daily Entry"))
-        .sheet(isPresented: $showAddSheet) {
-            SegmentEditSheet(date: selectedDate, segment: nil, suggestedStart: defaultStartForNewEntry)
-        }
-        .sheet(item: $editingSegment) { segment in
-            SegmentEditSheet(date: selectedDate, segment: segment)
-        }
-        .confirmationDialog(
-            tr("Delete this entry?"),
-            isPresented: Binding(
-                get: { segmentPendingDelete != nil },
-                set: { if !$0 { segmentPendingDelete = nil } }
-            ),
-            presenting: segmentPendingDelete
-        ) { segment in
-            Button(tr("Delete"), role: .destructive) {
-                modelContext.delete(segment)
-                segmentPendingDelete = nil
-            }
-            Button(tr("Cancel"), role: .cancel) { segmentPendingDelete = nil }
-        } message: { segment in
-            Text(tr("%@–%@ · %@ will be removed. This can’t be undone.",
-                    TimeField.format(segment.startTime),
-                    TimeField.format(segment.endTime),
-                    TimeFormatting.hours(segment.durationHours)))
+            entriesPanel(segments: segments, total: hours[day] ?? 0, summary: summary)
         }
     }
 
-    // MARK: - Week Day Row
+    // MARK: Left panel: calendar, week, day badges
 
-    private func weekDayRow(_ day: Date) -> some View {
+    /// Mon–Fri always, plus Sat/Sun when scheduled or when work is logged on them.
+    private func weekDays(hours: [Date: Double]) -> [Date] {
+        let monday = selectedDate.startOfWeekZurich
+        return (0..<7).map { monday.addingDays($0) }.filter { day in
+            !day.isWeekend || (hours[day] ?? 0) > 0 || calculator.schedule.hours(on: day) > 0
+        }
+    }
+
+    private struct DayBadge: Identifiable {
+        let icon: String
+        let color: Color
+        let text: String
+        var id: String { icon + text }
+    }
+
+    private func badges(for summary: DaySummary) -> [DayBadge] {
+        var badges: [DayBadge] = []
+        if let holiday = summary.holiday {
+            badges.append(DayBadge(icon: "flag.fill", color: .orange,
+                                   text: holiday.type == .halfDay ? tr("%@ (half day)", holiday.name) : holiday.name))
+        }
+        if let category = summary.category {
+            badges.append(DayBadge(icon: category.icon, color: category.color.color,
+                                   text: summary.isHalfDayAbsence ? tr("%@ (half day)", category.name) : category.name))
+            if summary.isOverAllowance {
+                badges.append(DayBadge(icon: "exclamationmark.triangle.fill", color: .red, text: tr("Over vacation allowance")))
+            }
+        }
+        if summary.isWeekend {
+            badges.append(DayBadge(icon: "moon.fill", color: .purple, text: tr("Weekend")))
+        } else if summary.scheduledHours == 0 {
+            badges.append(DayBadge(icon: "moon.fill", color: .purple, text: tr("No scheduled work")))
+        }
+        return badges
+    }
+
+    private func sidePanel(hours: [Date: Double], summary: DaySummary) -> some View {
+        let badges = badges(for: summary)
+        return VStack(alignment: .leading, spacing: 0) {
+            DatePicker("", selection: Binding(get: { selectedDate }, set: { selectedDate = $0.startOfDayZurich }),
+                       displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+
+            Divider()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(tr("This Week"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+
+                VStack(spacing: 2) {
+                    ForEach(weekDays(hours: hours), id: \.self) { day in
+                        weekDayRow(day, hours: hours[day] ?? 0)
+                    }
+                }
+                .padding(.horizontal, 12)
+            }
+
+            if !badges.isEmpty {
+                Divider()
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(badges) { badge in
+                        TintedPill(text: badge.text, icon: badge.icon, color: badge.color)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+
+            Spacer()
+        }
+    }
+
+    private func weekDayRow(_ day: Date, hours dayHours: Double) -> some View {
         let isSelected = day.isSameDay(as: selectedDate)
         let isToday = day.isSameDay(as: Date())
-        let daySegments = allSegments.filter { $0.date.isSameDay(as: day) }
-        let dayHours = daySegments.reduce(0.0) { $0 + $1.durationHours }
-        let dayCls = calculator.classify(date: day, absenceLookup: absenceLookup)
+        let expected = calculator.classify(date: day).expectedHours
 
         return Button {
             selectedDate = day
         } label: {
             HStack(spacing: 8) {
-                Text(day, format: .dateTime.weekday(.abbreviated))
+                Text(day, format: .app.weekday(.abbreviated))
                     .font(.caption)
                     .frame(width: 28, alignment: .leading)
-                    .foregroundStyle(isToday ? .blue : .secondary)
+                    .foregroundStyle(isToday ? Color.accentColor : Color.secondary)
 
-                Text(day, format: .dateTime.day())
+                Text(day, format: .app.day())
                     .font(.caption.monospacedDigit())
                     .frame(width: 20, alignment: .trailing)
 
-                // Mini progress bar
-                GeometryReader { geo in
-                    let expected = dayCls.expectedHours
-                    let progress = expected > 0 ? min(dayHours / expected, 1.0) : 0
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(.primary.opacity(0.06))
-                        if dayHours > 0 {
-                            RoundedRectangle(cornerRadius: 1.5)
-                                .fill(dayHours >= expected ? .green : .blue)
-                                .frame(width: max(geo.size.width * progress, 2))
-                        }
-                    }
-                }
-                .frame(height: 3)
+                MeterBar(progress: expected > 0 ? dayHours / expected : 0,
+                         color: dayHours >= expected ? .green : .accentColor,
+                         height: 3)
+                    .opacity(dayHours > 0 ? 1 : 0.6)
 
                 Text(dayHours > 0 ? TimeFormatting.hoursCompact(dayHours) : "–")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(dayHours > 0 ? .primary : .quaternary)
                     .frame(width: 36, alignment: .trailing)
             }
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .contentShape(Rectangle())
-            .background(
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(isSelected ? Color.blue.opacity(0.12) : Color.clear)
-            )
+            .rowHighlight(isSelected, tint: .accentColor)
         }
         .buttonStyle(.plain)
     }
 
+    // MARK: Right panel: day header + entries
+
+    private func entriesPanel(segments: [WorkSegment], total: Double, summary: DaySummary) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(selectedDate, format: .app.weekday(.wide).day().month(.wide).year())
+                    .font(.title2.bold())
+
+                HStack(spacing: 12) {
+                    Label(TimeFormatting.hours(total), systemImage: "clock")
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+
+                    if summary.expectedHours > 0 {
+                        Text(tr("of %@ expected", TimeFormatting.hours(summary.expectedHours)))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        if total > summary.expectedHours {
+                            Text(tr("· +%@ over", TimeFormatting.hours(total - summary.expectedHours)))
+                                .font(.subheadline)
+                                .foregroundStyle(.green)
+                        }
+                    }
+                }
+
+                if summary.expectedHours > 0 {
+                    MeterBar(progress: total / summary.expectedHours,
+                             color: total >= summary.expectedHours ? .green : .accentColor)
+                        .padding(.top, 6)
+                }
+
+                if let statusMessage {
+                    Label(statusMessage, systemImage: "checkmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
+
+            Divider()
+                .padding(.horizontal, 24)
+
+            if segments.isEmpty {
+                ContentUnavailableView {
+                    Label(tr("No time entries yet"), systemImage: "clock")
+                } description: {
+                    Text(tr("Click \"Add Entry\" or press ⌘N to log your work"))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(segments) { segment in
+                            SegmentRowView(segment: segment,
+                                           onEdit: { onEdit(segment) },
+                                           onDuplicate: { onDuplicate(segment) },
+                                           onDelete: { onDelete(segment) })
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                }
+            }
+        }
+    }
 }

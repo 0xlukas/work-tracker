@@ -17,7 +17,7 @@ struct MonthlyBreakdownView: View {
                 Text(tr("Balance"))
                     .frame(width: 80, alignment: .trailing)
             }
-            .font(.caption.bold())
+            .font(.caption.weight(.semibold))
             .foregroundStyle(.tertiary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -27,19 +27,7 @@ struct MonthlyBreakdownView: View {
                     Text(month.monthName)
                         .frame(width: 100, alignment: .leading)
 
-                    // Mini progress bar
-                    GeometryReader { geo in
-                        let target = month.expectedHours
-                        let progress = target > 0 ? min(month.actualHours / target, 1.5) : 0
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(.primary.opacity(0.06))
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(progressColor(month))
-                                .frame(width: geo.size.width * min(progress, 1.0))
-                        }
-                    }
-                    .frame(height: 4)
+                    MeterBar(progress: progress(month), color: progressColor(month), height: 4)
 
                     Text(TimeFormatting.hours(month.expectedHours))
                         .monospacedDigit()
@@ -48,28 +36,29 @@ struct MonthlyBreakdownView: View {
                     Text(TimeFormatting.hours(month.actualHours))
                         .monospacedDigit()
                         .frame(width: 72, alignment: .trailing)
-                    Text("\(month.balance >= 0 ? "+" : "")\(TimeFormatting.hours(abs(month.balance)))")
+                    Text(TimeFormatting.signedHours(month.balance))
                         .monospacedDigit()
-                        .foregroundColor(balanceColor(month))
+                        .foregroundStyle(balanceColor(month))
                         .frame(width: 80, alignment: .trailing)
                 }
                 .font(.subheadline)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(
-                    index % 2 == 0
-                        ? Color.clear
-                        : Color.primary.opacity(0.02)
-                )
+                .background(index.isMultiple(of: 2) ? Color.clear : Color.primary.opacity(0.025))
             }
         }
-        .background(RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(0.03)))
+        .cardSurface()
+    }
+
+    private func progress(_ month: MonthSummary) -> Double {
+        guard month.expectedHours > 0 else { return 0 }
+        return month.actualHours / month.expectedHours
     }
 
     private func progressColor(_ month: MonthSummary) -> Color {
         if month.actualHours == 0 { return .clear }
         if month.actualHours >= month.expectedHours { return .green }
-        return .blue
+        return .accentColor
     }
 
     private func balanceColor(_ month: MonthSummary) -> Color {
