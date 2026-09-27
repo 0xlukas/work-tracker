@@ -1,11 +1,13 @@
 #!/bin/sh
-# Build a release WorkTracker.app.
+# Build a release WorkTracker.app from WorkTracker.xcodeproj.
 #
 #   scripts/build-app.sh [output-folder]          # default: .build/app
 #   BUNDLE_ID=com.example.test scripts/build-app.sh /tmp/test   # separate settings domain
 #
-# The compiled String Catalog is copied into Contents/Resources/<lang>.lproj, where
-# Localization looks for it first.
+# Xcode compiles the String Catalogs (UI, Info.plist privacy strings, Siri phrases), the
+# Liquid Glass icon (Resources/AppIcon.icon → Assets.car + AppIcon.icns), extracts the
+# App Intents metadata Siri and Shortcuts read, and signs the app (ad hoc, hardened
+# runtime, microphone entitlement).
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -13,45 +15,15 @@ OUT="${1:-.build/app}"
 BUNDLE_ID="${BUNDLE_ID:-com.worktracker.app}"
 VERSION="${VERSION:-1.7}"
 BUILD="${BUILD:-11}"
+DERIVED=.build/xcode
 
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)"
+xcodebuild -project WorkTracker.xcodeproj -scheme WorkTracker -configuration Release \
+    -destination "generic/platform=macOS" -derivedDataPath "$DERIVED" -quiet \
+    PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+    build
+
 APP="$OUT/WorkTracker.app"
-
+mkdir -p "$OUT"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN/WorkTracker" "$APP/Contents/MacOS/WorkTracker"
-cp -R "$BIN/WorkTracker_WorkTracker.bundle/Contents/Resources/"*.lproj "$APP/Contents/Resources/"
-# Liquid Glass icon: actool compiles the Icon Composer file into Assets.car (the layered
-# icon macOS 26+ renders, incl. dark/tinted variants) plus a flat AppIcon.icns fallback.
-# actool needs absolute paths; OUT may be relative or absolute.
-RESOURCES="$(cd "$APP/Contents/Resources" && pwd)"
-xcrun actool "$PWD/Resources/AppIcon.icon" --compile "$RESOURCES" \
-    --platform macosx --minimum-deployment-target 27.0 --app-icon AppIcon \
-    --output-partial-info-plist "$RESOURCES/../icon-info.plist" >/dev/null
-rm -f "$RESOURCES/../icon-info.plist"
-
-cat > "$APP/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDisplayName</key><string>Work Tracker</string>
-    <key>CFBundleExecutable</key><string>WorkTracker</string>
-    <key>CFBundleIconFile</key><string>AppIcon</string>
-    <key>CFBundleIconName</key><string>AppIcon</string>
-    <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-    <key>CFBundleName</key><string>Work Tracker</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>$VERSION</string>
-    <key>CFBundleVersion</key><string>$BUILD</string>
-    <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleLocalizations</key><array><string>en</string><string>de</string></array>
-    <key>LSMinimumSystemVersion</key><string>27.0</string>
-    <key>NSHighResolutionCapable</key><true/>
-</dict>
-</plist>
-PLIST
-
-codesign --force --sign - "$APP"
+ditto "$DERIVED/Build/Products/Release/WorkTracker.app" "$APP"
 echo "Built $APP ($BUNDLE_ID $VERSION/$BUILD)"

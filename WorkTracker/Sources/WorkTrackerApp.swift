@@ -29,6 +29,7 @@ struct WorkTrackerApp: App {
                 try? container.mainContext.save()
             }
             self.container = container
+            IntentStore.container = container
             self.openError = nil
             backups.start(container: container)
         } catch {

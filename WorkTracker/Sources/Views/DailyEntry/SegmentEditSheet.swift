@@ -47,6 +47,16 @@ struct SegmentEditSheet: View {
         }
     }
 
+    /// A new entry pre-filled from a voice command, for the user to confirm.
+    init(draft: EntryDraft, project: Project?) {
+        self.segment = nil
+        _entryDate = State(initialValue: draft.date.startOfDayZurich)
+        _startTime = State(initialValue: draft.start)
+        _endTime = State(initialValue: draft.end)
+        _selectedProject = State(initialValue: project)
+        _note = State(initialValue: draft.note)
+    }
+
     /// Active projects, plus the selected one if it has been archived since.
     private var pickerProjects: [Project] {
         projects.filter { !$0.isArchived || $0 === selectedProject }
@@ -59,14 +69,8 @@ struct SegmentEditSheet: View {
 
     /// First blocking problem with the current input, or nil when it's valid.
     private var validationError: String? {
-        guard endTime > startTime else { return tr("End time must be after start time.") }
-        let dayStart = entryDate.startOfDayZurich
-        guard startTime >= dayStart, endTime <= dayStart.addingDays(1) else {
-            return tr("An entry can’t cross midnight — split it into two entries.")
-        }
-        if let clash = conflicts.first(where: { startTime < $0.endTime && endTime > $0.startTime }) {
-            return tr("Overlaps with %@–%@.", TimeField.format(clash.startTime, on: clash.date),
-                      TimeField.format(clash.endTime, on: clash.date))
+        if let problem = EntryActions.problem(start: startTime, end: endTime, on: entryDate, others: conflicts) {
+            return problem
         }
         guard selectedProject != nil else { return tr("Select a project.") }
         return nil

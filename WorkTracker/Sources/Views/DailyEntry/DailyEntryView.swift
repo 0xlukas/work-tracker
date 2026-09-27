@@ -6,12 +6,14 @@ enum EntrySheet: Identifiable {
     case new(start: Date)
     case edit(WorkSegment)
     case duplicate(WorkSegment, start: Date)
+    case draft(EntryDraft)
 
     var id: String {
         switch self {
         case .new(let start): return "new-\(start.timeIntervalSinceReferenceDate)"
         case .edit(let segment): return "edit-\(segment.persistentModelID.hashValue)"
         case .duplicate(let segment, _): return "dup-\(segment.persistentModelID.hashValue)"
+        case .draft(let draft): return "draft-\(draft.id)"
         }
     }
 }
@@ -19,11 +21,15 @@ enum EntrySheet: Identifiable {
 struct DailyEntryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Preferences.self) private var preferences
+    @Environment(WorkTimer.self) private var timer
     @Query(sort: \VacationDay.date) private var absences: [VacationDay]
 
     @State private var selectedDate = Date().startOfDayZurich
     @State private var sheet: EntrySheet?
     @State private var statusMessage: String?
+    @State private var showVoicePanel = false
+    /// Entries from a voice command still to be confirmed, one sheet after another.
+    @State private var pendingDrafts: [EntryDraft] = []
 
     var body: some View {
         let calculator = preferences.calculator(absences: VacationDay.lookup(absences))
@@ -33,7 +39,7 @@ struct DailyEntryView: View {
                        onDelete: { modelContext.delete($0) })
             .navigationTitle(tr("Daily Entry"))
             .toolbar { toolbar }
-            .sheet(item: $sheet) { sheet in
+            .sheet(item: $sheet, onDismiss: showNextDraft) { sheet in
                 switch sheet {
                 case .new(let start):
                     SegmentEditSheet(date: selectedDate, segment: nil, suggestedStart: start)
@@ -41,6 +47,8 @@ struct DailyEntryView: View {
                     SegmentEditSheet(date: selectedDate, segment: segment)
                 case .duplicate(let segment, let start):
                     SegmentEditSheet(date: segment.date, segment: nil, suggestedStart: start, template: segment)
+                case .draft(let draft):
+                    SegmentEditSheet(draft: draft, project: draft.project.flatMap { EntryActions.project(named: $0, in: modelContext) })
                 }
             }
             .task(id: statusMessage) {
@@ -78,6 +86,17 @@ struct DailyEntryView: View {
         }
 
         ToolbarItem {
+            Button { showVoicePanel = true } label: {
+                Label(tr("Voice Entry"), systemImage: "mic")
+            }
+            .keyboardShortcut("d", modifiers: [.command, .shift])
+            .help(tr("Log time or start and stop the timer by voice (⇧⌘D)"))
+            .popover(isPresented: $showVoicePanel, arrowEdge: .bottom) {
+                VoiceCommandPanel(onCommand: perform)
+            }
+        }
+
+        ToolbarItem {
             Menu {
                 if let previous = EntryActions.previousDayWithEntries(before: selectedDate, in: modelContext) {
                     Button(tr("Copy Entries from %@", previous.formatted(.app.weekday(.abbreviated).day().month(.abbreviated)))) {
@@ -106,13 +125,32 @@ struct DailyEntryView: View {
         }
     }
 
-    /// Start time to pre-fill a new entry with: the end of the day's last segment,
-    /// or 08:10 when the day has none.
     private func nextStart(on day: Date) -> Date {
-        if let lastEnd = EntryActions.segments(on: day, in: modelContext).map(\.endTime).max() {
-            return min(lastEnd, day.startOfDayZurich.addingDays(1).addingTimeInterval(-60))
+        EntryActions.nextStart(on: day, in: modelContext)
+    }
+
+    private func perform(_ command: VoiceCommand) {
+        switch command {
+        case .log(let drafts):
+            pendingDrafts = drafts
+            showNextDraft()
+        case .startTimer(let name, let date):
+            guard let project = name.flatMap({ EntryActions.project(named: $0, in: modelContext) })
+                    ?? EntryActions.lastUsedProject(in: modelContext) else { return }
+            statusMessage = TimerActions.start(project, at: date ?? Date(), timer: timer, context: modelContext)
+        case .stopTimer(let date):
+            statusMessage = TimerActions.stop(at: date ?? Date(), timer: timer, context: modelContext)
+        case .notUnderstood:
+            break
         }
-        return Calendar.zurich.date(bySettingHour: 8, minute: 10, second: 0, of: day.startOfDayZurich) ?? day
+    }
+
+    /// Open the next voice draft once the previous sheet has closed.
+    private func showNextDraft() {
+        guard sheet == nil, !pendingDrafts.isEmpty else { return }
+        let draft = pendingDrafts.removeFirst()
+        selectedDate = draft.date
+        sheet = .draft(draft)
     }
 
     private func copyEntries(from source: Date) {
