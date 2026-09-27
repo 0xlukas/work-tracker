@@ -72,6 +72,8 @@ final class DayCellNSView: NSView {
         addSubview(weekdayLabel)
         addSubview(dayLabel)
         addSubview(iconView)
+        // The cell's own label already reads "Mon 5, Vacation"; don't repeat its parts.
+        for view in [weekdayLabel, dayLabel, iconView] as [NSView] { view.setAccessibilityElement(false) }
 
         setAccessibilityRole(.button)
         setAccessibilityElement(true)
@@ -88,7 +90,8 @@ final class DayCellNSView: NSView {
         super.layout()
         weekdayLabel.frame = NSRect(x: 0, y: 20, width: bounds.width, height: 14)
         dayLabel.frame = NSRect(x: 0, y: 4, width: bounds.width, height: 16)
-        iconView.frame = NSRect(x: bounds.width - 14, y: bounds.height - 14, width: 11, height: 11)
+        // Bottom-right corner: the weekday label spans the full width at the top.
+        iconView.frame = NSRect(x: bounds.width - 12, y: 3, width: 9, height: 9)
     }
 
     func configure(dayText: String, weekdayText: String, category: CategoryDetails?,
@@ -118,16 +121,22 @@ final class DayCellNSView: NSView {
     }
 
     private func updateColors() {
+        effectiveAppearance.performAsCurrentDrawingAppearance { applyColors() }
+    }
+
+    private func applyColors() {
         let baseColor = category?.color.nsColor
 
         iconView.contentTintColor = .white
 
         if let baseColor {
             if isHalfDayAbsence {
-                // Half-day: lighter fill, colored border
+                // Half-day: lighter fill, colored border. The fill is translucent, so the
+                // text uses label colours (white text on it was unreadable in light mode).
                 layer?.backgroundColor = baseColor.withAlphaComponent(0.4).cgColor
-                dayLabel.textColor = .white
-                weekdayLabel.textColor = .white.withAlphaComponent(0.8)
+                dayLabel.textColor = .labelColor
+                weekdayLabel.textColor = .secondaryLabelColor
+                iconView.contentTintColor = .labelColor
                 layer?.borderWidth = 2
                 layer?.borderColor = baseColor.cgColor
             } else {
@@ -176,8 +185,9 @@ final class DayCellNSView: NSView {
             ctx.duration = 0.1
             self.animator().alphaValue = 1.0
         }
-        let isShift = event.modifierFlags.contains(.shift)
-        action?(isShift)
+        // Releasing outside the cell cancels the click, like a standard button.
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        action?(event.modifierFlags.contains(.shift))
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -187,6 +197,53 @@ final class DayCellNSView: NSView {
 
     override func mouseExited(with event: NSEvent) {
         isHovered = false
+        updateColors()
+    }
+
+    // MARK: Keyboard & VoiceOver
+
+    /// Reachable with Tab when Full Keyboard Access is on; Space/Return toggle the day
+    /// (Shift for a range), matching a click.
+    /// Only with keyboard navigation on, so plain clicks don't leave a focus ring behind.
+    override var acceptsFirstResponder: Bool { NSApp.isFullKeyboardAccessEnabled }
+    override var canBecomeKeyView: Bool { acceptsFirstResponder }
+
+    override func keyDown(with event: NSEvent) {
+        switch event.charactersIgnoringModifiers {
+        case " ", "\r": action?(event.modifierFlags.contains(.shift))
+        default: super.keyDown(with: event)
+        }
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let became = super.becomeFirstResponder()
+        if became { noteFocusRingMaskChanged() }
+        return became
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned { noteFocusRingMaskChanged() }
+        return resigned
+    }
+
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override func drawFocusRingMask() {
+        NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8).fill()
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        action?(false)
+        return true
+    }
+
+    // MARK: Appearance
+
+    /// Layer colours are static CGColors; re-resolve them when light/dark or the
+    /// accent colour changes.
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
         updateColors()
     }
 }

@@ -3,6 +3,7 @@ import SwiftData
 
 struct ProjectsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(WorkTimer.self) private var timer
     @Query(sort: \Project.name) private var projects: [Project]
 
     @State private var newProjectName = ""
@@ -154,14 +155,14 @@ struct ProjectsView: View {
                     Text(tr("From"))
                         .foregroundStyle(.secondary)
                         .font(.subheadline)
-                    DatePicker("", selection: $reportFrom, displayedComponents: .date)
+                    DatePicker(tr("From"), selection: $reportFrom, in: ...reportTo, displayedComponents: .date)
                         .labelsHidden()
                 }
                 HStack(spacing: 8) {
                     Text(tr("To"))
                         .foregroundStyle(.secondary)
                         .font(.subheadline)
-                    DatePicker("", selection: $reportTo, displayedComponents: .date)
+                    DatePicker(tr("To"), selection: $reportTo, in: reportFrom..., displayedComponents: .date)
                         .labelsHidden()
                 }
                 Spacer()
@@ -278,6 +279,14 @@ struct ProjectsView: View {
                 }
             }
             .onTapGesture(count: 2) { startEditing(project) }
+            // One VoiceOver element per project; the hover buttons are unreachable for
+            // VoiceOver, so offer the same actions on the row.
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(project.isArchived ? tr("%@, archived", project.name) : project.name)
+            .accessibilityValue(tr("%lld entries", project.segments.count))
+            .accessibilityAction(named: tr("Rename")) { startEditing(project) }
+            .accessibilityAction(named: project.isArchived ? tr("Restore") : tr("Archive")) { project.isArchived.toggle() }
+            .accessibilityAction(named: tr("Delete")) { requestDelete(project) }
             .contextMenu {
                 Button { startEditing(project) } label: { Label(tr("Rename"), systemImage: "pencil") }
                 Button { colorPickerProject = project } label: { Label(tr("Change Colour…"), systemImage: "paintpalette") }
@@ -328,7 +337,10 @@ struct ProjectsView: View {
     }
 
     private func requestDelete(_ project: Project) {
-        if project.segments.isEmpty {
+        if timer.isRunning && timer.projectID == project.persistentModelID {
+            // Stopping the timer needs the project, or the tracked time is lost.
+            deleteErrorMessage = tr("A timer is running for '%@'. Stop it first.", project.name)
+        } else if project.segments.isEmpty {
             projectPendingDelete = project
         } else {
             deleteErrorMessage = tr("'%@' has %lld time entries. Delete or reassign them first, or archive the project.",

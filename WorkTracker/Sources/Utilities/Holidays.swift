@@ -86,8 +86,9 @@ enum ZurichHolidays {
     }
 }
 
-/// Holiday lookups for any year, computed on first use and cached. Only holidays on
-/// weekdays are kept — on a weekend they don't change anything.
+/// Holiday lookups for any year, computed on first use and cached. Holidays on weekends
+/// are kept too: they only matter on days with scheduled hours, which the calculator
+/// checks, so a schedule that includes Saturdays still gets e.g. a Saturday 1 August off.
 final class HolidayCalendar: @unchecked Sendable {
     static let shared = HolidayCalendar()
 
@@ -105,8 +106,7 @@ final class HolidayCalendar: @unchecked Sendable {
         if let cached = years[year] { return cached }
         var lookup: [Date: Holiday] = [:]
         for holiday in ZurichHolidays.holidays(for: year) {
-            let day = holiday.date.startOfDayZurich
-            if !day.isWeekend { lookup[day] = holiday }
+            lookup[holiday.date.startOfDayZurich] = holiday
         }
         years[year] = lookup
         return lookup

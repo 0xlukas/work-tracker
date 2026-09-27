@@ -22,7 +22,14 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/WorkTracker" "$APP/Contents/MacOS/WorkTracker"
 cp -R "$BIN/WorkTracker_WorkTracker.bundle/Contents/Resources/"*.lproj "$APP/Contents/Resources/"
-cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# Liquid Glass icon: actool compiles the Icon Composer file into Assets.car (the layered
+# icon macOS 26+ renders, incl. dark/tinted variants) plus a flat AppIcon.icns fallback.
+# actool needs absolute paths; OUT may be relative or absolute.
+RESOURCES="$(cd "$APP/Contents/Resources" && pwd)"
+xcrun actool "$PWD/Resources/AppIcon.icon" --compile "$RESOURCES" \
+    --platform macosx --minimum-deployment-target 27.0 --app-icon AppIcon \
+    --output-partial-info-plist "$RESOURCES/../icon-info.plist" >/dev/null
+rm -f "$RESOURCES/../icon-info.plist"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -32,6 +39,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleDisplayName</key><string>Work Tracker</string>
     <key>CFBundleExecutable</key><string>WorkTracker</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundleIconName</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
     <key>CFBundleName</key><string>Work Tracker</string>
     <key>CFBundlePackageType</key><string>APPL</string>

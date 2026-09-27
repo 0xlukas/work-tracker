@@ -1,8 +1,16 @@
 import SwiftUI
+import AppKit
 import SwiftData
+
+/// Keeps the app running when the main window closes: the menu bar item (today's hours,
+/// the timer) and the hourly backup schedule live on without a window.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+}
 
 @main
 struct WorkTrackerApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var backups: BackupManager
     @State private var preferences = Preferences.shared
     @State private var timer = WorkTimer.shared

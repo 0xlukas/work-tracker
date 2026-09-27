@@ -45,6 +45,7 @@ struct MonthlyBreakdownView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(index.isMultiple(of: 2) ? Color.clear : Color.primary.opacity(0.025))
+                .accessibilityElement(children: .combine)
             }
         }
         .cardSurface()

@@ -34,7 +34,12 @@ enum Localization {
     /// (`Bundle.main`); when running from `swift run`/tests they live in the SwiftPM
     /// resource bundle (`Bundle.module`). Prefer whichever actually has them.
     private static var baseBundle: Bundle {
+        #if SWIFT_PACKAGE
         Bundle.main.path(forResource: "de", ofType: "lproj") != nil ? .main : .module
+        #else
+        // Xcode app target: the catalog is compiled straight into the app bundle.
+        .main
+        #endif
     }
 
     /// The language actually shown: the forced one, or the best system match.
@@ -48,10 +53,12 @@ enum Localization {
     }
 
     /// Locale for dates and numbers: the UI language with the user's region, so
-    /// month and weekday names match the UI language.
+    /// month and weekday names match the UI language — also when the system language
+    /// is one the app isn't translated into (the UI then falls back to English).
     static var locale: Locale {
-        if current == .system { return .autoupdatingCurrent }
-        let region = Locale.current.region?.identifier ?? "CH"
+        let system = Locale.autoupdatingCurrent
+        if current == .system, system.language.languageCode?.identifier == effectiveLanguageCode { return system }
+        let region = system.region?.identifier ?? "CH"
         return Locale(identifier: "\(effectiveLanguageCode)_\(region)")
     }
 

@@ -91,6 +91,16 @@
         }
       }
     },
+    "%@, archived": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, archiviert"
+          }
+        }
+      }
+    },
     "%@/%@ vacation days": {
       "localizations": {
         "de": {
@@ -437,6 +447,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ein Projekt mit diesem Namen existiert bereits."
+          }
+        }
+      }
+    },
+    "A timer is running for '%@'. Stop it first.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für «%@» läuft ein Timer. Stoppen Sie ihn zuerst."
           }
         }
       }

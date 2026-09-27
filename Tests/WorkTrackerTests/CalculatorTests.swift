@@ -186,9 +186,40 @@ final class HolidayTests: XCTestCase {
         XCTAssertEqual(HolidayCalendar.shared.holiday(on: day(2050, 8, 1))?.name, "Bundesfeier")
     }
 
-    func testWeekendHolidaysAreIgnored() {
+    func testWeekendHolidaysOnlyCountWhenScheduled() {
         // 1 Aug 2026 is a Saturday.
-        XCTAssertNil(HolidayCalendar.shared.holiday(on: day(2026, 8, 1)))
+        let bundesfeier = day(2026, 8, 1)
+        XCTAssertEqual(HolidayCalendar.shared.holiday(on: bundesfeier)?.name, "Bundesfeier")
+
+        let standard = WorkHoursCalculator(absences: [:])
+        XCTAssertEqual(standard.periodSummary(from: bundesfeier, to: bundesfeier, hours: [:]).holidayDays, 0)
+
+        var period = WorkSchedule.Period.weekdays(effectiveFrom: .distantPast)
+        period.hours[5] = 4 // works Saturday mornings
+        let saturdays = WorkHoursCalculator(absences: [:], schedule: WorkSchedule(periods: [period]))
+        XCTAssertEqual(saturdays.classify(date: bundesfeier).expectedHours, 0)
+        XCTAssertEqual(saturdays.periodSummary(from: bundesfeier, to: bundesfeier, hours: [:]).holidayDays, 1)
+        XCTAssertEqual(saturdays.classify(date: day(2026, 8, 8)).expectedHours, 4)
+    }
+}
+
+final class OverviewTests: XCTestCase {
+    /// Tracking started on Friday 25 Sep 2026: this week and month expect only that day.
+    func testPeriodsStartAtTrackingStart() {
+        let start = day(9, 25)
+        let numbers = OverviewNumbers(calculator: WorkHoursCalculator(absences: [:]),
+                                      hours: [start: 3.25], year: 2026, trackingStart: start, now: time(start, 17))
+        XCTAssertEqual(numbers.today.expectedHours, 8)
+        XCTAssertEqual(numbers.week.expectedHours, 8)
+        XCTAssertEqual(numbers.month.expectedHours, 8)
+        XCTAssertEqual(numbers.week.balance, -4.75, accuracy: 0.0001)
+    }
+
+    func testTodayBeforeTrackingStartExpectsNothing() {
+        let numbers = OverviewNumbers(calculator: WorkHoursCalculator(absences: [:]),
+                                      hours: [:], year: 2026, trackingStart: day(9, 28), now: time(day(9, 25), 12))
+        XCTAssertEqual(numbers.today.expectedHours, 0)
+        XCTAssertEqual(numbers.week.expectedHours, 0)
     }
 }
 

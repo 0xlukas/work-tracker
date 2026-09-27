@@ -4,7 +4,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 /// Every number the Overview shows, computed once per update.
-private struct OverviewNumbers {
+struct OverviewNumbers {
     let today: PeriodSummary
     let week: PeriodSummary
     let month: PeriodSummary
@@ -31,9 +31,11 @@ private struct OverviewNumbers {
         func summary(_ from: Date, _ to: Date) -> PeriodSummary {
             from <= to ? calculator.periodSummary(from: from, to: to, hours: hours) : .empty
         }
-        self.today = summary(today, today)
-        week = summary(today.startOfWeekZurich, today)
-        month = summary(cal.date(from: cal.dateComponents([.year, .month], from: today))!, today)
+        // Nothing is expected before tracking started, so a new user's first week or
+        // month doesn't open with a large deficit.
+        self.today = summary(max(today, trackingStart), today)
+        week = summary(max(today.startOfWeekZurich, trackingStart), today)
+        month = summary(max(cal.date(from: cal.dateComponents([.year, .month], from: today))!, trackingStart), today)
         toDate = summary(effectiveStart, effectiveEnd)
         fullYear = summary(effectiveStart, yearEnd)
         calendarYear = summary(yearStart, yearEnd)
