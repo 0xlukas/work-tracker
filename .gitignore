@@ -2,3 +2,4 @@
 *.app/
 .claude/
 .DS_Store
+xcuserdata/

@@ -531,6 +531,16 @@
         }
       }
     },
+    "Add a project first.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legen Sie zuerst ein Projekt an."
+          }
+        }
+      }
+    },
     "Add a time entry (⌘N)": {
       "localizations": {
         "de": {
@@ -547,6 +557,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Neues Projekt hinzufügen …"
+          }
+        }
+      }
+    },
+    "Adds a time entry for a project.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fügt einen Zeiteintrag für ein Projekt hinzu."
           }
         }
       }
@@ -587,6 +607,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jährlicher Ferienanspruch"
+          }
+        }
+      }
+    },
+    "Apple Intelligence couldn’t process that. Try again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence konnte das nicht verarbeiten. Versuchen Sie es erneut."
+          }
+        }
+      }
+    },
+    "Apple Intelligence doesn’t support this language yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence unterstützt diese Sprache noch nicht."
+          }
+        }
+      }
+    },
+    "Apple Intelligence is still getting ready. Try again in a few minutes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence wird noch vorbereitet. Versuchen Sie es in ein paar Minuten erneut."
+          }
+        }
+      }
+    },
+    "Apple Intelligence isn’t available right now.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence ist gerade nicht verfügbar."
           }
         }
       }
@@ -1151,6 +1211,16 @@
         }
       }
     },
+    "Couldn’t tell what to do. Mention a project and times, or say start or stop.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unklar, was zu tun ist. Nennen Sie ein Projekt und Zeiten, oder sagen Sie «beginnen» oder «Feierabend»."
+          }
+        }
+      }
+    },
     "Counting rule": {
       "localizations": {
         "de": {
@@ -1351,6 +1421,16 @@
         }
       }
     },
+    "Didn’t hear anything.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es wurde nichts gehört."
+          }
+        }
+      }
+    },
     "Discard Timer": {
       "localizations": {
         "de": {
@@ -1387,6 +1467,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fertig"
+          }
+        }
+      }
+    },
+    "Downloading speech recognition…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spracherkennung wird geladen …"
           }
         }
       }
@@ -1861,12 +1951,72 @@
         }
       }
     },
+    "Leave empty for the last-used project.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leer lassen für das zuletzt verwendete Projekt."
+          }
+        }
+      }
+    },
     "Leave expected hours unchanged": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Sollstunden unverändert lassen"
+          }
+        }
+      }
+    },
+    "Listening…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hört zu …"
+          }
+        }
+      }
+    },
+    "Log ${project} from ${start} to ${end}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${project} von ${start} bis ${end} erfassen"
+          }
+        }
+      }
+    },
+    "Log Work": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeit erfassen"
+          }
+        }
+      }
+    },
+    "Log time or start and stop the timer by voice (⇧⌘D)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeit erfassen oder den Timer per Sprache starten und stoppen (⇧⌘D)"
+          }
+        }
+      }
+    },
+    "Logged %@ on %@ (%@–%@).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ auf %@ erfasst (%@–%@)."
           }
         }
       }
@@ -2067,6 +2217,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Noch keine Zeiteinträge"
+          }
+        }
+      }
+    },
+    "No timer is running.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es läuft kein Timer."
           }
         }
       }
@@ -2571,6 +2731,36 @@
         }
       }
     },
+    "Saved %@ on %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ auf %@ gespeichert."
+          }
+        }
+      }
+    },
+    "Saved the time on %@ and started the timer for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeit auf %@ gespeichert und Timer für %@ gestartet."
+          }
+        }
+      }
+    },
+    "Say “Starting work on %@”, “Stopping work” or “Yesterday 8 to 12 on %@”.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sagen Sie «Ich beginne mit %@», «Feierabend» oder «Gestern 8 bis 12 an %@»."
+          }
+        }
+      }
+    },
     "Select a project.": {
       "localizations": {
         "de": {
@@ -2661,6 +2851,16 @@
         }
       }
     },
+    "Speech recognition doesn’t support this language on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Spracherkennung unterstützt diese Sprache auf diesem Mac nicht."
+          }
+        }
+      }
+    },
     "Spread Evenly over Monday–Friday": {
       "localizations": {
         "de": {
@@ -2691,6 +2891,16 @@
         }
       }
     },
+    "Start Work": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeit beginnen"
+          }
+        }
+      }
+    },
     "Start a timer for a project": {
       "localizations": {
         "de": {
@@ -2707,6 +2917,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Startdatum"
+          }
+        }
+      }
+    },
+    "Start work on ${project}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeit an ${project} beginnen"
+          }
+        }
+      }
+    },
+    "Started the timer for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timer für %@ gestartet."
+          }
+        }
+      }
+    },
+    "Starting…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gestartet …"
+          }
+        }
+      }
+    },
+    "Starts the timer for a project. A running timer is saved first.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startet den Timer für ein Projekt. Ein laufender Timer wird zuerst gespeichert."
           }
         }
       }
@@ -2731,12 +2981,42 @@
         }
       }
     },
+    "Stop Work": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeit beenden"
+          }
+        }
+      }
+    },
     "Stop the timer and save the tracked time (%@)": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Timer stoppen und die erfasste Zeit speichern (%@)"
+          }
+        }
+      }
+    },
+    "Stopped the timer; nothing to save.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timer gestoppt; nichts zu speichern."
+          }
+        }
+      }
+    },
+    "Stops the timer and saves the tracked time as entries.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stoppt den Timer und speichert die erfasste Zeit als Einträge."
           }
         }
       }
@@ -2891,6 +3171,26 @@
         }
       }
     },
+    "There’s no project called %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es gibt kein Projekt namens %@."
+          }
+        }
+      }
+    },
+    "This Mac doesn’t support Apple Intelligence.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Mac unterstützt Apple Intelligence nicht."
+          }
+        }
+      }
+    },
     "This Month": {
       "localizations": {
         "de": {
@@ -3011,12 +3311,42 @@
         }
       }
     },
+    "Try Again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erneut versuchen"
+          }
+        }
+      }
+    },
+    "Turn on Apple Intelligence in System Settings to use voice entry.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktivieren Sie Apple Intelligence in den Systemeinstellungen, um die Spracheingabe zu verwenden."
+          }
+        }
+      }
+    },
     "Type to search…": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Zum Suchen tippen …"
+          }
+        }
+      }
+    },
+    "Understanding…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird verarbeitet …"
           }
         }
       }
@@ -3081,6 +3411,16 @@
         }
       }
     },
+    "Voice Entry": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spracheingabe"
+          }
+        }
+      }
+    },
     "Weekday": {
       "localizations": {
         "de": {
@@ -3127,6 +3467,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Work Tracker kann seine Datenbank nicht öffnen"
+          }
+        }
+      }
+    },
+    "Work Tracker can’t open its database.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Work Tracker kann seine Datenbank nicht öffnen."
+          }
+        }
+      }
+    },
+    "Work Tracker needs microphone access. Allow it in System Settings ▸ Privacy & Security ▸ Microphone.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Work Tracker braucht Zugriff auf das Mikrofon. Erlauben Sie ihn unter Systemeinstellungen ▸ Datenschutz & Sicherheit ▸ Mikrofon."
           }
         }
       }

@@ -8,14 +8,17 @@ A macOS 27 app for tracking working hours against a Swiss (Zurich) work schedule
 swift test                      # needs Xcode selected and its license accepted
 scripts/build-app.sh            # release WorkTracker.app in .build/app
 BUNDLE_ID=com.worktracker.app.test scripts/build-app.sh /tmp/test   # separate settings domain for testing
+WORK_TRACKER_LIVE_MODEL=1 swift test --filter LiveVoiceModelTests  # sample sentences through the on-device model
 ```
 
-The script copies the compiled String Catalog into `Contents/Resources/<lang>.lproj`, compiles the Liquid Glass app icon (`Resources/AppIcon.icon`, editable in Icon Composer; light, dark and tinted variants) with `actool`, and sets `LSMinimumSystemVersion` to 27.0.
+The app is built from `WorkTracker.xcodeproj` (open it in Xcode to run and debug). Its app target syncs the `WorkTracker/Sources` folder, so new files need no project changes; `Package.swift` covers the same sources for `swift test`. Keep the deployment target (27.0) and Swift version in step between the two. Xcode compiles the String Catalogs (`Localizable`, `InfoPlist` for the privacy prompts, `AppShortcuts` for the Siri phrases), the Liquid Glass icon (`Resources/AppIcon.icon`), extracts the App Intents metadata Siri and Shortcuts read, and signs ad hoc with the hardened runtime and the microphone entitlement (`WorkTracker/WorkTracker.entitlements`).
 
 ## Features
 
 - **Daily Entry** — entries per day with project and optional note. Times are typed as `0930`, `930`, `9` or `9:30`; ↑/↓ nudge (⇧ for hours); the End field accepts `24:00`. ⌘[ / ⌘] move between days, ⌘T jumps to today, ⌘N adds an entry. Right-click an entry to duplicate it; **More ▸ Copy Entries from …** copies the previous day with entries (overlapping ones are skipped). New entries default to the last-used project.
 - **Timer** — start a timer for a project from the toolbar or the menu bar item; stopping it creates entries, split at midnight and around existing entries. The menu bar shows today's hours and this week's balance. A running timer survives quitting.
+- **Voice entry** (Apple Intelligence) — the microphone button in Daily Entry (⇧⌘D) listens in the UI language, transcribed on the Mac with SpeechAnalyzer. The on-device model turns the sentence into a command: “Starting work on Alpha” / «Ich beginne mit Alpha» starts the timer (switching from a running one), “Stopping work” / «Feierabend» stops and saves it, and “Yesterday 8:30 to 12 on Alpha, code review” opens pre-filled entry sheets to confirm (several blocks in one sentence open one after another). Needs Apple Intelligence turned on.
+- **Siri and Shortcuts** — “Start work on Alpha in Work Tracker”, “Stop work in Work Tracker”, “Log work in Work Tracker” (German: «Arbeit an Alpha in Work Tracker beginnen», «Feierabend in Work Tracker», …). The actions Start Work, Stop Work and Log Work are also in the Shortcuts app and Spotlight. Siri phrases must name the app; the in-app button doesn't need it.
 - **Undo** — Edit ▸ Undo (⌘Z) reverts deleting, copying and editing entries, absences and projects.
 - **Projects** — colour per project (click the circle), archiving (hides a project from pickers, keeps its history), and an hours-per-project report for any date range. Names must be unique.
 - **Absences** — click cycle full day → half day → none, Shift-click for ranges. Built-in categories: vacation, sick, public service; plus custom categories (see below).
@@ -55,4 +58,4 @@ To restore, pick a snapshot in Settings ▸ Backups ▸ Restore. The app restart
 
 ## Validation
 
-`swift test` covers the calculator (all categories and day kinds, schedules, per-year allowance and carry-over), holidays, migrations V1–V4, backups, store moves and restores, CSV, the timer, entry actions, parsing, and catalog completeness. Set `WORK_TRACKER_TEST_STORE` to a standalone database snapshot to also check that a real store migrates without losing entries or hours.
+`swift test` covers the calculator (all categories and day kinds, schedules, per-year allowance and carry-over), holidays, migrations V1–V4, backups, store moves and restores, CSV, the timer, entry actions, parsing, voice command resolution, and catalog completeness. Set `WORK_TRACKER_TEST_STORE` to a standalone database snapshot to also check that a real store migrates without losing entries or hours.

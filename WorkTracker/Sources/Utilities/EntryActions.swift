@@ -74,6 +74,36 @@ enum EntryActions {
         return (try? context.fetch(descriptor))?.first?.date.startOfDayZurich
     }
 
+    /// Start time to pre-fill a new entry with: the end of the day's last segment,
+    /// or 08:10 when the day has none.
+    static func nextStart(on day: Date, in context: ModelContext) -> Date {
+        if let lastEnd = segments(on: day, in: context).map(\.endTime).max() {
+            return min(lastEnd, day.startOfDayZurich.addingDays(1).addingTimeInterval(-60))
+        }
+        return Calendar.zurich.date(bySettingHour: 8, minute: 10, second: 0, of: day.startOfDayZurich) ?? day
+    }
+
+    /// Why `start..<end` can't be saved on `day`, or nil when it can. `others` are the
+    /// day's other entries (excluding the one being edited).
+    static func problem(start: Date, end: Date, on day: Date, others: [WorkSegment]) -> String? {
+        guard end > start else { return tr("End time must be after start time.") }
+        let dayStart = day.startOfDayZurich
+        guard start >= dayStart, end <= dayStart.addingDays(1) else {
+            return tr("An entry can’t cross midnight — split it into two entries.")
+        }
+        if let clash = others.first(where: { start < $0.endTime && end > $0.startTime }) {
+            return tr("Overlaps with %@–%@.", TimeField.format(clash.startTime, on: clash.date),
+                      TimeField.format(clash.endTime, on: clash.date))
+        }
+        return nil
+    }
+
+    /// The active project whose name matches `name`, ignoring case and diacritics.
+    static func project(named name: String, in context: ModelContext) -> Project? {
+        let projects = (try? context.fetch(FetchDescriptor<Project>(predicate: #Predicate { !$0.isArchived }))) ?? []
+        return projects.first { $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
+    }
+
     /// The project of the most recently logged entry that isn't archived.
     static func lastUsedProject(in context: ModelContext) -> Project? {
         var descriptor = FetchDescriptor<WorkSegment>(sortBy: [SortDescriptor(\.startTime, order: .reverse)])
@@ -107,5 +137,29 @@ enum EntryActions {
     static func moved(_ time: Date, from day: Date, to target: Date) -> Date {
         let offset = Calendar.zurich.dateComponents([.minute], from: day.startOfDayZurich, to: time).minute ?? 0
         return Calendar.zurich.date(byAdding: .minute, value: offset, to: target.startOfDayZurich)!
+    }
+}
+
+/// Timer actions shared by the voice panel and Siri. Each returns a confirmation to show
+/// or speak.
+@MainActor
+enum TimerActions {
+    /// Start the timer; a running timer is stopped and saved first.
+    static func start(_ project: Project, at date: Date = Date(), timer: WorkTimer, context: ModelContext) -> String {
+        if timer.isRunning {
+            let previous = timer.project(in: context)?.name ?? ""
+            timer.switchProject(to: project, context: context, at: date)
+            return tr("Saved the time on %@ and started the timer for %@.", previous, project.name)
+        }
+        timer.start(project: project, at: date)
+        return tr("Started the timer for %@.", project.name)
+    }
+
+    static func stop(at date: Date = Date(), timer: WorkTimer, context: ModelContext) -> String {
+        guard timer.isRunning else { return tr("No timer is running.") }
+        let name = timer.project(in: context)?.name ?? ""
+        let hours = timer.stop(context: context, at: date).reduce(0) { $0 + $1.durationHours }
+        guard hours > 0 else { return tr("Stopped the timer; nothing to save.") }
+        return tr("Saved %@ on %@.", TimeFormatting.hours(hours), name)
     }
 }
