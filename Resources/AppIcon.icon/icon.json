@@ -3,21 +3,8 @@
     {
       "value" : {
         "linear-gradient" : [
-          "display-p3:0.918,0.235,0.200,1.000",
-          "display-p3:0.667,0.082,0.106,1.000"
-        ],
-        "orientation" : {
-          "start" : { "x" : 0.5, "y" : 0 },
-          "stop" : { "x" : 0.5, "y" : 1 }
-        }
-      }
-    },
-    {
-      "appearance" : "dark",
-      "value" : {
-        "linear-gradient" : [
-          "display-p3:0.200,0.180,0.180,1.000",
-          "display-p3:0.090,0.080,0.080,1.000"
+          "display-p3:0.200,0.200,0.200,1.000",
+          "display-p3:0.040,0.040,0.040,1.000"
         ],
         "orientation" : {
           "start" : { "x" : 0.5, "y" : 0 },
@@ -34,10 +21,7 @@
           "name" : "Portrait",
           "image-name" : "portrait.svg",
           "glass" : true,
-          "fill-specializations" : [
-            { "appearance" : "dark", "value" : { "solid" : "display-p3:0.918,0.235,0.200,1.000" } },
-            { "appearance" : "tinted", "value" : { "solid" : "display-p3:1.000,1.000,1.000,1.000" } }
-          ]
+          "fill" : { "solid" : "display-p3:1.000,1.000,1.000,1.000" }
         }
       ],
       "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
