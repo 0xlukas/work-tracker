@@ -174,6 +174,7 @@ private struct DailyEntryWeek: View {
     let onDuplicate: (WorkSegment) -> Void
     let onDelete: (WorkSegment) -> Void
 
+    @Environment(Preferences.self) private var preferences
     @Query private var weekSegments: [WorkSegment]
 
     init(selectedDate: Binding<Date>, calculator: WorkHoursCalculator, statusMessage: String?,
@@ -196,13 +197,20 @@ private struct DailyEntryWeek: View {
         let day = selectedDate.startOfDayZurich
         let summary = calculator.classify(date: day)
         let segments = weekSegments.filter { $0.date.isSameDay(as: day) }
+        let isMissing = isMissing(day, hours: hours[day] ?? 0)
 
         HStack(spacing: 0) {
             sidePanel(hours: hours, summary: summary)
                 .frame(width: 272)
             Divider()
-            entriesPanel(segments: segments, total: hours[day] ?? 0, summary: summary)
+            entriesPanel(segments: segments, total: hours[day] ?? 0, summary: summary, isMissing: isMissing)
         }
+    }
+
+    /// A past working day since tracking started with nothing logged.
+    private func isMissing(_ day: Date, hours: Double) -> Bool {
+        day >= preferences.trackingStartDate && day < Date().startOfDayZurich
+            && calculator.isMissingEntries(calculator.classify(date: day), hours: hours)
     }
 
     // MARK: Left panel: calendar, week, day badges
@@ -269,6 +277,14 @@ private struct DailyEntryWeek: View {
                     }
                 }
                 .padding(.horizontal, 12)
+
+                MissingEntriesReader(trackingStart: preferences.trackingStartDate) { missing in
+                    if !missing.isEmpty {
+                        MissingEntriesMenu(days: missing) { selectedDate = $0 }
+                            .padding(.horizontal, 12)
+                            .padding(.top, 2)
+                    }
+                }
             }
 
             if !badges.isEmpty {
@@ -292,6 +308,7 @@ private struct DailyEntryWeek: View {
         let isSelected = day.isSameDay(as: selectedDate)
         let isToday = day.isSameDay(as: Date())
         let expected = calculator.classify(date: day).expectedHours
+        let isMissing = isMissing(day, hours: dayHours)
 
         return Button {
             selectedDate = day
@@ -311,10 +328,19 @@ private struct DailyEntryWeek: View {
                          height: 3)
                     .opacity(dayHours > 0 ? 1 : 0.6)
 
-                Text(dayHours > 0 ? TimeFormatting.hoursCompact(dayHours) : "–")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(dayHours > 0 ? .primary : .quaternary)
-                    .frame(width: 36, alignment: .trailing)
+                Group {
+                    if isMissing {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .foregroundStyle(.orange)
+                            .help(tr("No entries"))
+                            .accessibilityLabel(tr("No entries"))
+                    } else {
+                        Text(dayHours > 0 ? TimeFormatting.hoursCompact(dayHours) : "–")
+                            .foregroundStyle(dayHours > 0 ? .primary : .quaternary)
+                    }
+                }
+                .font(.caption.monospacedDigit())
+                .frame(width: 36, alignment: .trailing)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -326,7 +352,7 @@ private struct DailyEntryWeek: View {
 
     // MARK: Right panel: day header + entries
 
-    private func entriesPanel(segments: [WorkSegment], total: Double, summary: DaySummary) -> some View {
+    private func entriesPanel(segments: [WorkSegment], total: Double, summary: DaySummary, isMissing: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(selectedDate, format: .app.weekday(.wide).day().month(.wide).year())
@@ -370,7 +396,14 @@ private struct DailyEntryWeek: View {
             Divider()
                 .padding(.horizontal, 24)
 
-            if segments.isEmpty {
+            if segments.isEmpty && isMissing {
+                ContentUnavailableView {
+                    Label(tr("No entries for this day"), systemImage: "exclamationmark.circle")
+                } description: {
+                    Text(tr("This was a working day. Press ⌘N to log your time, or record an absence in Absences."))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if segments.isEmpty {
                 ContentUnavailableView {
                     Label(tr("No time entries yet"), systemImage: "clock")
                 } description: {

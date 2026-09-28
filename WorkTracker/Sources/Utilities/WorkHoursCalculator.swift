@@ -209,6 +209,21 @@ struct WorkHoursCalculator {
                           absence: entry, absenceDays: days, uncreditedDays: over)
     }
 
+    /// A working day with nothing logged: work was expected, no time was entered and no
+    /// full-day absence covers it. Full-day absences count as logged even when they grant
+    /// no time credit (over the allowance, or "leave expected hours unchanged").
+    func isMissingEntries(_ summary: DaySummary, hours: Double) -> Bool {
+        summary.expectedHours > 0 && hours <= 0 && !(summary.absence != nil && summary.absenceDays >= 1)
+    }
+
+    /// Days in `from…to` (inclusive) with missing entries, most recent first.
+    func missingEntryDays(from: Date, to: Date, hours: [Date: Double]) -> [Date] {
+        guard from <= to else { return [] }
+        return from.startOfDayZurich.daysThrough(to.startOfDayZurich)
+            .filter { isMissingEntries(classify(date: $0), hours: hours[$0] ?? 0) }
+            .reversed()
+    }
+
     // MARK: - Periods
 
     /// Totals for `from…to` (inclusive). `hours` is worked hours per Zurich day.

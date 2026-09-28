@@ -56,6 +56,20 @@ final class CalculatorTests: XCTestCase {
         XCTAssertEqual(summary(silvester, entry(.sick)).expectedHours, 0)
     }
 
+    /// Working days with nothing logged; weekends, holidays and full-day absences (even
+    /// uncredited ones) are covered, a half-day absence alone is not.
+    func testMissingEntryDays() {
+        // 21 Dec 2026 is a Monday; 24–26 are holidays, then Sunday and Monday 28.
+        let calculator = WorkHoursCalculator(absences: [
+            day(12, 21): custom(.unchanged),
+            day(12, 22): entry(.vacation, half: true),
+        ])
+        let hours = [day(12, 23): 8.0]
+        XCTAssertEqual(calculator.missingEntryDays(from: day(12, 21), to: day(12, 28), hours: hours),
+                       [day(12, 28), day(12, 22)])
+        XCTAssertEqual(calculator.missingEntryDays(from: day(12, 28), to: day(12, 21), hours: hours), [])
+    }
+
     func testServiceLongRange() {
         let days = day(6, 1).daysThrough(day(7, 31))
         let lookup = Dictionary(uniqueKeysWithValues: days.map { ($0, entry(.service)) })

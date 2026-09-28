@@ -32,8 +32,17 @@ struct ContentView: View {
                 // The system sidebar extends to the window edge and takes on the
                 // macOS 27 glass treatment on its own; keep it a plain List of Labels.
                 List(NavigationItem.allCases, selection: $selection) { item in
-                    Label(tr(item.rawValue), systemImage: item.icon)
+                    if item == .dailyEntry {
+                        // Count of past working days with nothing logged, like an unread count.
+                        MissingEntriesReader(trackingStart: preferences.trackingStartDate) { missing in
+                            Label(tr(item.rawValue), systemImage: item.icon)
+                                .badge(missing.count)
+                        }
                         .tag(item)
+                    } else {
+                        Label(tr(item.rawValue), systemImage: item.icon)
+                            .tag(item)
+                    }
                 }
                 .listStyle(.sidebar)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
