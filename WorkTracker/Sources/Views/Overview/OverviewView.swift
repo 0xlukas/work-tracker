@@ -14,6 +14,8 @@ struct OverviewNumbers {
     let allTime: PeriodSummary
     let months: [MonthSummary]
     let budget: VacationBudget
+    /// Past working days in the selected year with nothing logged.
+    let missingEntryDays: Int
     let yearStart: Date
     let yearEnd: Date
     /// First and last day of the selected year inside the tracking window (up to today).
@@ -42,6 +44,8 @@ struct OverviewNumbers {
         allTime = summary(trackingStart, today)
         months = calculator.monthlyBreakdown(year: year, hours: hours, startDate: trackingStart, endDate: today)
         budget = calculator.vacationBudget(year: year)
+        missingEntryDays = calculator.missingEntryDays(from: effectiveStart, to: min(today.addingDays(-1), yearEnd),
+                                                       hours: hours).count
     }
 }
 
@@ -146,6 +150,12 @@ struct OverviewView: View {
 
                 // Info pills — always show full calendar year counts
                 FlowLayout(spacing: 8) {
+                    if numbers.missingEntryDays > 0 {
+                        TintedPill(text: tr("%lld days without entries", numbers.missingEntryDays),
+                                   icon: "exclamationmark.circle.fill", color: .orange)
+                            .help(tr("Working days with no time entries or full-day absence. Daily Entry lists them."))
+                    }
+
                     TintedPill(text: tr("%lld public holidays", numbers.calendarYear.holidayDays),
                                icon: "flag.fill", color: .orange)
                         .help(tr("Full days off on your working days — e.g. Karfreitag, Weihnachten, Bundesfeier"))

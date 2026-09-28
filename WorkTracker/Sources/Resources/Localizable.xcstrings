@@ -131,6 +131,46 @@
         }
       }
     },
+    "%lld days without entries": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Tag ohne Einträge"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Tage ohne Einträge"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld day without entries"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld days without entries"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld entries": {
       "localizations": {
         "de": {
@@ -204,6 +244,46 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld half-day holidays"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld more": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld weiterer"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld weitere"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld more"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld more"
                 }
               }
             }
@@ -1351,6 +1431,16 @@
         }
       }
     },
+    "Days Without Entries": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tage ohne Einträge"
+          }
+        }
+      }
+    },
     "Default (Application Support)": {
       "localizations": {
         "de": {
@@ -2197,6 +2287,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keine früheren Einträge zum Kopieren"
+          }
+        }
+      }
+    },
+    "No entries": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Einträge"
+          }
+        }
+      }
+    },
+    "No entries for this day": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Einträge für diesen Tag"
           }
         }
       }
@@ -3221,6 +3331,16 @@
         }
       }
     },
+    "This was a working day. Press ⌘N to log your time, or record an absence in Absences.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dies war ein Arbeitstag. Drücken Sie ⌘N, um Ihre Zeit zu erfassen, oder tragen Sie unter Abwesenheiten eine Abwesenheit ein."
+          }
+        }
+      }
+    },
     "Time Entries…": {
       "localizations": {
         "de": {
@@ -3537,6 +3657,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ist-Stunden"
+          }
+        }
+      }
+    },
+    "Working days since tracking started with no time entries or full-day absence": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeitstage seit Erfassungsbeginn ohne Zeiteinträge oder ganztägige Abwesenheit"
+          }
+        }
+      }
+    },
+    "Working days with no time entries or full-day absence. Daily Entry lists them.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeitstage ohne Zeiteinträge oder ganztägige Abwesenheit. Die Tageserfassung listet sie auf."
           }
         }
       }
